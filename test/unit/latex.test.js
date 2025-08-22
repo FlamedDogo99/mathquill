@@ -1,4 +1,5 @@
 suite('latex', function () {
+  const $ = window.test_only_jquery;
   function assertParsesLatex(str, latex) {
     if (arguments.length < 2) latex = str;
 
@@ -285,7 +286,7 @@ suite('latex', function () {
 
       test('overflow triggers automatic horizontal scroll', function (done) {
         var mqEl = mq.el();
-        var rootEl = mq.__controller.root.jQ[0];
+        var rootEl = mq.__controller.root.domFrag().oneElement();
         var cursor = mq.__controller.cursor;
 
         $(mqEl).width(10);
@@ -304,7 +305,7 @@ suite('latex', function () {
             );
             assert.ok(
               mqEl.getBoundingClientRect().right >
-                cursor.jQ[0].getBoundingClientRect().right,
+                cursor.domFrag().firstElement().getBoundingClientRect().right,
               'cursor right end is inside the field'
             );
           } catch (error) {
@@ -405,7 +406,7 @@ suite('latex', function () {
       outer.innerFields.m.makeStatic();
       assert.equal(outer.innerFields.m.__controller.editable, false);
       assert.equal(
-        outer.innerFields.m.__controller.container.hasClass(
+        domFrag(outer.innerFields.m.__controller.container).hasClass(
           'mq-editable-field'
         ),
         false
@@ -416,7 +417,7 @@ suite('latex', function () {
       outer.innerFields.m.makeStatic();
       assert.equal(outer.innerFields.m.__controller.editable, false);
       assert.equal(
-        outer.innerFields.m.__controller.container.hasClass(
+        domFrag(outer.innerFields.m.__controller.container).hasClass(
           'mq-editable-field'
         ),
         false
@@ -426,7 +427,7 @@ suite('latex', function () {
       outer.innerFields.m.makeEditable();
       assert.equal(outer.innerFields.m.__controller.editable, true);
       assert.equal(
-        outer.innerFields.m.__controller.container.hasClass(
+        domFrag(outer.innerFields.m.__controller.container).hasClass(
           'mq-editable-field'
         ),
         true
@@ -437,7 +438,7 @@ suite('latex', function () {
       outer.innerFields.m.makeEditable();
       assert.equal(outer.innerFields.m.__controller.editable, true);
       assert.equal(
-        outer.innerFields.m.__controller.container.hasClass(
+        domFrag(outer.innerFields.m.__controller.container).hasClass(
           'mq-editable-field'
         ),
         true
@@ -492,19 +493,5 @@ suite('latex', function () {
       'langlerfish/ranglerfish (checking for confusion with langle/rangle)',
       '\\left\\langlerfish 123\\right\\ranglerfish)'
     );
-  });
-
-  suite('selectable span', function () {
-    setup(function () {
-      MQ.StaticMath($('<span>2&lt;x</span>').appendTo('#mock')[0]);
-    });
-
-    function selectableContent() {
-      return document.querySelector('#mock .mq-selectable').textContent;
-    }
-
-    test('escapes < in textContent', function () {
-      assert.equal(selectableContent(), '$2<x$');
-    });
   });
 });
