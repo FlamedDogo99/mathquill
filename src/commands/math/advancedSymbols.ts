@@ -9,7 +9,10 @@ LatexCmds.notin =
   LatexCmds.otimes =
     (latex: string) =>
       new BinaryOperator('\\' + latex + ' ', h.entityText('&' + latex + ';'));
-
+LatexCmds['≢'] =
+  LatexCmds.nequiv =
+  LatexCmds.notequiv =
+    bindBinaryOperator('\\nequiv ', '&#8802;', 'not equivalent to');
 LatexCmds['∗'] =
   LatexCmds.ast =
   LatexCmds.star =

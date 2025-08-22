@@ -458,7 +458,10 @@
       -ms-filter: "FlipH";
     }
   }
-  .mq-matrix {
+}
+
+
+.mq-matrix {
     vertical-align: middle;
     margin-left: 0.1em;
     margin-right: 0.1em;
@@ -467,6 +470,7 @@
       width: auto;
       border-bottom: none;
       border-spacing: 3px;
+      border-bottom: 2px;
       border-collapse: separate;
       &.mq-rows-1 { /* better alignment when there's just one row */
         vertical-align: middle;
@@ -480,5 +484,9 @@
       padding: 0.1em 0.3em;
       vertical-align: baseline;
     }
+    /*
+    td.mq-hasCursor {
+       todo focus indicator 
+    }
+    */
   }
-}

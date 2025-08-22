@@ -588,7 +588,7 @@ function defaultAutoOpNames() {
     _maxLength: 9,
   };
   var mostOps = (
-    'arg deg det dim exp gcd hom inf ker lg lim ln log max min sup' +
+    'arg deg det dim exp gcd hom inf ker lg lim ln log max min mod sup' +
     ' limsup liminf injlim projlim Pr'
   ).split(' ');
   for (var i = 0; i < mostOps.length; i += 1) {
@@ -758,6 +758,11 @@ LatexCmds.$ = bindVanillaSymbol('\\$', '$', 'dollar');
 
 LatexCmds.square = bindVanillaSymbol('\\square ', '\u25A1', 'square');
 LatexCmds.mid = bindVanillaSymbol('\\mid ', '\u2223', 'mid');
+
+LatexCmds['∤'] =
+  LatexCmds.nmid =
+  LatexCmds.notmid =
+    bindVanillaSymbol('\\nmid ', '&#8740;', 'does not divide');
 
 // does not use Symbola font
 class NonSymbolaSymbol extends MQSymbol {
@@ -1013,6 +1018,77 @@ LatexCmds['¾'] = () => new LatexFragment('\\frac34');
 // to make that change because I'm fairly confident I'd break something
 // around handling valid latex as latex rather than treating it as keystrokes.
 LatexCmds['√'] = () => new LatexFragment('\\sqrt{}');
+
+// Really poorly made matrix support, abusing _{} and ^{}
+class FakeMatrix extends LatexFragment {
+  private readonly frontBracket: string;
+  private readonly endBracket: string;
+  constructor(frontBracket: string, endBracket: string) {
+    super('');
+    this.frontBracket = frontBracket;
+    this.endBracket = endBracket;
+  }
+  ceilingRound2(x: number) {
+    x--;
+    x = x | (x >> 1);
+    x = x | (x >> 2);
+    x = x | (x >> 4);
+    x = x | (x >> 8);
+    x = x | (x >> 16);
+    x = x | (x >> 0);
+    return x + 1;
+  }
+  makeCell(number: number, size: number, flip: boolean): string {
+    const possibleBottom = Math.min(number, size);
+    const possibleTop = number - possibleBottom;
+    const top = flip ? possibleBottom : possibleTop;
+    const bottom = flip ? possibleTop : possibleBottom;
+    const newSize = size >> 1;
+    const bottomString =
+      bottom == 0
+        ? ''
+        : '_{' +
+          (newSize > 0 ? this.makeCell(bottom, newSize, flip) : '') +
+          '}';
+    const topString =
+      top == 0
+        ? ''
+        : '^{' + (newSize > 0 ? this.makeCell(top, newSize, flip) : '') + '}';
+    return bottomString + topString;
+  }
+
+  makeCenteredColumn(size: number) {
+    const nearestPower2 = this.ceilingRound2(size) >> 1;
+    const top = Math.floor(size * 0.5);
+    const bottom = size - top;
+    return (
+      '^{' +
+      this.makeCell(top, nearestPower2, false) +
+      '}_{' +
+      this.makeCell(bottom, nearestPower2, true) +
+      '}'
+    );
+  }
+  makeMatrix(columns: number, rows: number) {
+    const insideContent = new Array(columns + 1)
+      .join(this.makeCenteredColumn(rows) + '\\ \\ ')
+      .slice(0, -4);
+    return this.frontBracket + insideContent + this.endBracket;
+  }
+  createLeftOf(cursor: Cursor) {
+    const inputColumns = parseInt(prompt('Columns:', '2') ?? '1', 10);
+    const inputRows = parseInt(prompt('Rows:', '2') ?? '1', 10);
+    this.latexStr = this.makeMatrix(inputRows, inputColumns);
+    return super.createLeftOf(cursor);
+  }
+}
+
+LatexCmds['matrix'] = () => new FakeMatrix('', '');
+LatexCmds['pmatrix'] = () => new FakeMatrix('\\left(', '\\right)');
+LatexCmds['bmatrix'] = () => new FakeMatrix('\\left[', '\\right]');
+LatexCmds['Bmatrix'] = () => new FakeMatrix('\\left\\{', '\\right\\}');
+LatexCmds['vmatrix'] = () => new FakeMatrix('\\left|', '\\right|');
+LatexCmds['Vmatrix'] = () => new FakeMatrix('\\left\\lVert', '\\right\\rVert');
 
 // Binary operator determination is used in several contexts for PlusMinus nodes and their descendants.
 // For instance, we set the item's class name based on this factor, and also assign different mathspeak values (plus vs positive, negative vs minus).

@@ -197,6 +197,7 @@ suite('latex', function () {
     assertParsesLatex('\\degree ');
     assertParsesLatex('\\square ');
   });
+
   test('matrices', function () {
     assertParsesLatex('\\begin{matrix}x\\end{matrix}');
     assertParsesLatex('\\begin{pmatrix}x\\end{pmatrix}');
@@ -216,6 +217,7 @@ suite('latex', function () {
       '\\begin{Vmatrix}x&\\\\x&y\\\\x&\\end{Vmatrix}'
     );
   });
+
   suite('public API', function () {
     var mq;
     setup(function () {
