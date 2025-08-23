@@ -1083,12 +1083,12 @@ class FakeMatrix extends LatexFragment {
   }
 }
 
-LatexCmds['matrix'] = () => new FakeMatrix('', '');
-LatexCmds['pmatrix'] = () => new FakeMatrix('\\left(', '\\right)');
-LatexCmds['bmatrix'] = () => new FakeMatrix('\\left[', '\\right]');
-LatexCmds['Bmatrix'] = () => new FakeMatrix('\\left\\{', '\\right\\}');
-LatexCmds['vmatrix'] = () => new FakeMatrix('\\left|', '\\right|');
-LatexCmds['Vmatrix'] = () => new FakeMatrix('\\left\\lVert', '\\right\\rVert');
+LatexCmds['fmatrix'] = () => new FakeMatrix('', '');
+LatexCmds['fpmatrix'] = () => new FakeMatrix('\\left(', '\\right)');
+LatexCmds['fbmatrix'] = () => new FakeMatrix('\\left[', '\\right]');
+LatexCmds['fBmatrix'] = () => new FakeMatrix('\\left\\{', '\\right\\}');
+LatexCmds['fvmatrix'] = () => new FakeMatrix('\\left|', '\\right|');
+LatexCmds['fVmatrix'] = () => new FakeMatrix('\\left\\lVert', '\\right\\rVert');
 
 // Binary operator determination is used in several contexts for PlusMinus nodes and their descendants.
 // For instance, we set the item's class name based on this factor, and also assign different mathspeak values (plus vs positive, negative vs minus).
