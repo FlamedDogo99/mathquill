@@ -733,7 +733,7 @@ LatexCmds['∑'] =
 
 LatexCmds['∏'] =
   LatexCmds.prod =
-  LatexCmds.product =
+  LatexCmds['product'] =
     () => new SummationNotation('\\prod ', U_NARY_PRODUCT, 'product');
 
 LatexCmds.coprod = LatexCmds.coproduct = () =>

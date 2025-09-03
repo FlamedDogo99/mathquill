@@ -413,8 +413,8 @@ class TextPiece extends MQNode {
     return this.deleteTowards(dir, cursor);
   }
 }
-
 LatexCmds.text =
+  LatexCmds.$ =
   LatexCmds.textnormal =
   LatexCmds.textrm =
   LatexCmds.textup =
