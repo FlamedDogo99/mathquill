@@ -401,6 +401,17 @@ function getInterface(v: number): MathQuill.v3.API | MathQuill.v1.API {
       if (ctrlr.blurred) cursor.hide().parent.blur(cursor);
       return this;
     }
+    getCommandKeys(): string[] {
+      return Array.prototype.concat(
+        Object.keys(LatexCmds),
+        Object.keys(EnvironmentCmds)
+      );
+    }
+    getCommand(command: string) {
+      const latexCmd = LatexCmds[command];
+      if (latexCmd) return latexCmd;
+      return EnvironmentCmds[command] ?? false;
+    }
     matrixCmd(cmd: string, ...args: unknown[]) {
       var ctrlr = this.__controller.notify(undefined),
         cursor = ctrlr.cursor;

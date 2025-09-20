@@ -341,6 +341,23 @@ suite('latex', function () {
           assert.equal(mq.latex(), '\\sum_{ }^{5}x^{n}');
         });
       });
+      suite('\\lim', function () {
+        test('empty', function () {
+          mq.write('\\lim');
+          assert.equal(mq.latex(), '\\lim_{ }');
+
+          mq.keystroke('Left').typedText('x');
+          assert.equal(mq.latex(), '\\lim_x');
+        });
+
+        test('nonempty', function () {
+          mq.write('\\lim_x');
+          assert.equal(mq.latex(), '\\lim_x');
+
+          mq.keystroke('Left').typedText('y');
+          assert.equal(mq.latex(), '\\lim_{xy}');
+        });
+      });
     });
   });
 

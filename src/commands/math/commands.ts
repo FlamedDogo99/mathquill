@@ -739,35 +739,46 @@ LatexCmds['∏'] =
 LatexCmds.coprod = LatexCmds.coproduct = () =>
   new SummationNotation('\\coprod ', U_NARY_COPRODUCT, 'co product');
 
+class IntegralNotation extends SummationNotation {
+  constructor(ch: string, displayText: string, ariaLabel: string) {
+    super(ch, displayText, ariaLabel);
+
+    this.ariaLabel = ariaLabel;
+    this.domView = new DOMView(2, (blocks) =>
+      h('span', { class: 'mq-int mq-non-leaf' }, [
+        h('big', {}, [h.text(displayText)]),
+        h('span', { class: 'mq-supsub mq-non-leaf' }, [
+          h('span', { class: 'mq-sup' }, [
+            h.block('span', { class: 'mq-sup-inner' }, blocks[1]),
+          ]),
+          h.block('span', { class: 'mq-sub' }, blocks[0]),
+          h('span', { style: 'display:inline-block;width:0' }, [
+            h.text(U_ZERO_WIDTH_SPACE),
+          ]),
+        ]),
+      ])
+    );
+  }
+
+  createLeftOf(cursor: Cursor) {
+    // FIXME: refactor rather than overriding
+    MathCommand.prototype.createLeftOf.call(this, cursor);
+  }
+}
+
 LatexCmds['∫'] =
   LatexCmds['int'] =
   LatexCmds.integral =
-    class extends SummationNotation {
-      constructor() {
-        super('\\int ', '', 'integral');
+    () => new IntegralNotation('\\int', U_INTEGRAL, 'integral');
+LatexCmds['∬'] = LatexCmds['iint'] = () =>
+  new IntegralNotation('\\iint', '∬', 'double integral');
+LatexCmds['∭'] = LatexCmds['iiint'] = () =>
+  new IntegralNotation('\\iiint', '∭', 'triple integral');
+LatexCmds['⨌'] = LatexCmds['iiiint'] = () =>
+  new IntegralNotation('\\iiiint', '⨌', 'quadruple integral');
+LatexCmds['idotsint'] = () =>
+  new IntegralNotation('\\idotsint', '∫⋯∫', 'i dots integral');
 
-        this.ariaLabel = 'integral';
-        this.domView = new DOMView(2, (blocks) =>
-          h('span', { class: 'mq-int mq-non-leaf' }, [
-            h('big', {}, [h.text(U_INTEGRAL)]),
-            h('span', { class: 'mq-supsub mq-non-leaf' }, [
-              h('span', { class: 'mq-sup' }, [
-                h.block('span', { class: 'mq-sup-inner' }, blocks[1]),
-              ]),
-              h.block('span', { class: 'mq-sub' }, blocks[0]),
-              h('span', { style: 'display:inline-block;width:0' }, [
-                h.text(U_ZERO_WIDTH_SPACE),
-              ]),
-            ]),
-          ])
-        );
-      }
-
-      createLeftOf(cursor: Cursor) {
-        // FIXME: refactor rather than overriding
-        MathCommand.prototype.createLeftOf.call(this, cursor);
-      }
-    };
 var Fraction =
   (LatexCmds.frac =
   LatexCmds.dfrac =
@@ -2319,6 +2330,7 @@ EnvironmentCmds.bmatrix = () => new Matrix('[', ']', 'bmatrix');
 EnvironmentCmds.Bmatrix = () => new Matrix('{', '}', 'Bmatrix');
 EnvironmentCmds.vmatrix = () => new Matrix('|', '|', 'vmatrix');
 EnvironmentCmds.Vmatrix = () => new Matrix('&#8741;', '&#8741;', 'Vmatrix');
+EnvironmentCmds.cases = () => new Matrix('{', '', 'cases');
 
 class MatrixCell extends MathBlock {
   row;
@@ -2353,3 +2365,88 @@ class MatrixCell extends MathBlock {
     else cursor.insDirOf(dir, this.parent);
   }
 }
+
+class LimitNotation extends MathCommand {
+  constructor(ch: string, displayText: string, ariaLabel?: string) {
+    super();
+    this.ariaLabel = ariaLabel || ch.replace(/^\\/, '');
+    var domView = new DOMView(1, (blocks) =>
+      h('span', { class: 'mq-limit mq-non-leaf' }, [
+        h('span', { class: 'mq-lim' }, [h.text(displayText)]),
+        h('span', { class: 'mq-approaches' }, [h.block('span', {}, blocks[0])]),
+      ])
+    );
+
+    MQSymbol.prototype.setCtrlSeqHtmlTextAndMathspeak.call(this, ch, domView);
+  }
+
+  latex() {
+    function simplify(latex: string) {
+      return latex.length === 1 ? latex : '{' + (latex || ' ') + '}';
+    }
+    return this.ctrlSeq + '_' + simplify(this.getEnd(L).latex());
+  }
+  parser() {
+    var string = Parser.string;
+    var optWhitespace = Parser.optWhitespace;
+    var succeed = Parser.succeed;
+    var block = latexMathParser.block;
+
+    var self = this,
+      child = new MathBlock();
+    self.blocks = [child];
+    child.adopt(self, 0, 0);
+
+    return optWhitespace
+      .then(string('_'))
+      .then(function () {
+        return block.then(function (block) {
+          block.children().adopt(child, child.getEnd(R), 0);
+          return succeed(self);
+        });
+      })
+      .many()
+      .result(self);
+  }
+  mathspeak() {
+    return (
+      'Start ' +
+      this.ariaLabel +
+      ' as ' +
+      this.getEnd(L).mathspeak() +
+      ', end ' +
+      this.ariaLabel +
+      ', '
+    );
+  }
+  finalizeTree() {
+    var endsL = this.getEnd(L);
+
+    endsL.ariaLabel = 'as';
+
+    this.downInto = this.getEnd(L);
+    this.getEnd(L).upOutOf = function (cursor) {
+      // this is basically gonna be insRightOfMeUnlessAtEnd,
+      // by analogy with insLeftOfMeUnlessAtEnd
+      var cmd = this.parent,
+        ancestorCmd: Cursor | MQNode = cursor;
+      do {
+        if (ancestorCmd[L]) return cursor.insRightOf(cmd);
+        ancestorCmd = ancestorCmd.parent.parent;
+      } while (ancestorCmd !== cmd);
+      return cursor.insLeftOf(cmd);
+    };
+  }
+}
+LatexCmds.lim = LatexCmds.limit = () =>
+  new LimitNotation('\\lim', 'lim', 'limit');
+LatexCmds.inf = LatexCmds.infimum = () =>
+  new LimitNotation('\\inf', 'inf', 'infimum');
+LatexCmds.sup = LatexCmds.supremum = () =>
+  new LimitNotation('\\sup', 'sup', 'supremum');
+LatexCmds.Pr = LatexCmds.probability = () =>
+  new LimitNotation('\\Pr', 'Pr', 'probability');
+LatexCmds.liminf = () =>
+  new LimitNotation('\\liminf', 'lim inf', 'limit infimum');
+LatexCmds.limsup = () =>
+  new LimitNotation('\\limsup', 'lim sup', 'limit supremum');

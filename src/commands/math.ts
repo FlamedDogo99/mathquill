@@ -419,6 +419,18 @@ function bindVanillaSymbol(
       mathspeak
     );
 }
+function bindNonSymbolaSymbol(
+  ch: string,
+  htmlEntity?: string,
+  mathspeak?: string
+) {
+  return () =>
+    new NonSymbolaSymbol(
+      ch,
+      htmlEntity ? h.entityText(htmlEntity) : undefined,
+      mathspeak
+    );
+}
 
 class BinaryOperator extends MQSymbol {
   constructor(
