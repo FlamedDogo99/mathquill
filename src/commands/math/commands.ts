@@ -1714,29 +1714,52 @@ LatexCmds.begin = class extends MathCommand {
     var string = Parser.string;
     var regex = Parser.regex;
     return string('{')
-      .then(regex(/^[a-z]+/i))
+      .then(regex(/^[a-z|]+/i))
       .skip(string('}'))
-      .then(function (env) {
-        return (
-          EnvironmentCmds[env]
-            ? EnvironmentCmds[env]().parser()
-            : Parser.fail('unknown environment type: ' + env)
-        ).skip(string('\\end{' + env + '}'));
+      .many()
+      .then(function (items) {
+        if (items.length === 1) {
+          const env = items[0];
+          return (
+            EnvironmentCmds[env]
+              ? EnvironmentCmds[env]().parser()
+              : Parser.fail('unknown environment type: ' + env)
+          ).skip(string('\\end{' + env + '}'));
+        } else if (items.length === 2) {
+          const env = items[0];
+          const settings = items[1];
+          if (!EnvironmentCmds[env])
+            return Parser.fail('unknown environment type: ' + env);
+          let envInstance = EnvironmentCmds[env]();
+          if (envInstance instanceof Environment)
+            (envInstance as Environment).columnOptions = settings;
+          return envInstance.parser().skip(string('\\end{' + env + '}'));
+        }
+        return Parser.fail('unknown environment type');
       });
   }
 };
 
 class Environment extends MathCommand {
+  columnOptions = '';
   environment = '';
   template = [
     ['\\begin{', '}'],
     ['\\end{', '}'],
   ];
   wrappers() {
-    return [
-      this.template[0].join(this.environment),
-      this.template[1].join(this.environment),
-    ];
+    return this.columnOptions === ''
+      ? [
+          this.template[0].join(this.environment),
+          this.template[1].join(this.environment),
+        ]
+      : [
+          this.template[0].join(this.environment) +
+            '{' +
+            this.columnOptions +
+            '}',
+          this.template[1].join(this.environment),
+        ];
   }
 }
 
@@ -2324,6 +2347,14 @@ class Matrix extends Environment {
   }
 }
 
+class LatexArray extends Matrix {
+  columnSettings: string;
+  constructor(environment: string) {
+    super('', '', environment);
+    throw new Error('Array environment is not supported yet');
+  }
+}
+
 EnvironmentCmds.matrix = () => new Matrix('', '', 'matrix');
 EnvironmentCmds.pmatrix = () => new Matrix('(', ')', 'pmatrix');
 EnvironmentCmds.bmatrix = () => new Matrix('[', ']', 'bmatrix');
@@ -2331,6 +2362,7 @@ EnvironmentCmds.Bmatrix = () => new Matrix('{', '}', 'Bmatrix');
 EnvironmentCmds.vmatrix = () => new Matrix('|', '|', 'vmatrix');
 EnvironmentCmds.Vmatrix = () => new Matrix('&#8741;', '&#8741;', 'Vmatrix');
 EnvironmentCmds.cases = () => new Matrix('{', '', 'cases');
+// EnvironmentCmds.array = () => new LatexArray('a', 'a', 'array');
 
 class MatrixCell extends MathBlock {
   row;

@@ -5,19 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="3efc9ecd-7a07-4072-b163-38947afe25c3" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/test/reference.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/commands/math.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/math.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/commands/math/advancedSymbols.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/math/advancedSymbols.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/commands/math/basicSymbols.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/math/basicSymbols.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/commands/math/commands.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/math/commands.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/css/math.less" beforeDir="false" afterPath="$PROJECT_DIR$/src/css/math.less" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/publicapi.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/publicapi.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/unit/latex.test.js" beforeDir="false" afterPath="$PROJECT_DIR$/test/unit/latex.test.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/unit/publicapi.test.js" beforeDir="false" afterPath="$PROJECT_DIR$/test/unit/publicapi.test.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/unit/typing.test.js" beforeDir="false" afterPath="$PROJECT_DIR$/test/unit/typing.test.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -126,7 +115,7 @@
       <workItem from="1757462420268" duration="2391000" />
       <workItem from="1757950200471" duration="110000" />
       <workItem from="1758315923535" duration="5905000" />
-      <workItem from="1758332127210" duration="10213000" />
+      <workItem from="1758332127210" duration="18410000" />
     </task>
     <servers />
   </component>
