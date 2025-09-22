@@ -1714,52 +1714,29 @@ LatexCmds.begin = class extends MathCommand {
     var string = Parser.string;
     var regex = Parser.regex;
     return string('{')
-      .then(regex(/^[a-z|]+/i))
+      .then(regex(/^[a-z]+/i))
       .skip(string('}'))
-      .many()
-      .then(function (items) {
-        if (items.length === 1) {
-          const env = items[0];
-          return (
-            EnvironmentCmds[env]
-              ? EnvironmentCmds[env]().parser()
-              : Parser.fail('unknown environment type: ' + env)
-          ).skip(string('\\end{' + env + '}'));
-        } else if (items.length === 2) {
-          const env = items[0];
-          const settings = items[1];
-          if (!EnvironmentCmds[env])
-            return Parser.fail('unknown environment type: ' + env);
-          let envInstance = EnvironmentCmds[env]();
-          if (envInstance instanceof Environment)
-            (envInstance as Environment).columnOptions = settings;
-          return envInstance.parser().skip(string('\\end{' + env + '}'));
-        }
-        return Parser.fail('unknown environment type');
+      .then(function (env) {
+        return (
+          EnvironmentCmds[env]
+            ? EnvironmentCmds[env]().parser()
+            : Parser.fail('unknown environment type: ' + env)
+        ).skip(string('\\end{' + env + '}'));
       });
   }
 };
 
 class Environment extends MathCommand {
-  columnOptions = '';
   environment = '';
   template = [
     ['\\begin{', '}'],
     ['\\end{', '}'],
   ];
   wrappers() {
-    return this.columnOptions === ''
-      ? [
-          this.template[0].join(this.environment),
-          this.template[1].join(this.environment),
-        ]
-      : [
-          this.template[0].join(this.environment) +
-            '{' +
-            this.columnOptions +
-            '}',
-          this.template[1].join(this.environment),
-        ];
+    return [
+      this.template[0].join(this.environment),
+      this.template[1].join(this.environment),
+    ];
   }
 }
 
@@ -2348,10 +2325,122 @@ class Matrix extends Environment {
 }
 
 class LatexArray extends Matrix {
-  columnSettings: string;
-  constructor(environment: string) {
-    super('', '', environment);
-    throw new Error('Array environment is not supported yet');
+  columnSpecString: string = 'cc';
+  columnSpec: { type: string; right: boolean; left: boolean }[] = [
+    { type: 'center', right: false, left: false },
+    { type: 'center', right: false, left: false },
+  ];
+  constructor() {
+    super('', '', 'array');
+  }
+  wrappers() {
+    const wrappers = [
+      this.template[0].join(this.environment) +
+        '{' +
+        this.columnSpecString +
+        '}',
+      this.template[1].join(this.environment),
+    ];
+    return wrappers;
+  }
+  parser() {
+    const self = this;
+    const parent = super.parser;
+    let string = Parser.string;
+    const regex = Parser.regex;
+    return string('{')
+      .then(regex(/^[clr|]+/i))
+      .skip(string('}'))
+      .then(function (columnSpec) {
+        self.parseColumnSpec(columnSpec);
+        return parent.call(self); // Get matrix functionality
+      });
+  }
+
+  html() {
+    let row: number = -1;
+    let self = this;
+    this.domView = new DOMView(0, (blocks) => {
+      let rows: HTMLElement[] = [];
+      let tds: HTMLElement[] = [];
+      blocks.forEach(function (cell) {
+        if (cell instanceof MatrixCell) {
+          if (row !== cell.row && tds.length > 0) {
+            rows.push(h('tr', {}, tds));
+            tds.length = 0;
+          }
+          row = cell.row;
+          const columnIndex = Math.min(self.columnSpec.length - 1, tds.length);
+          const columnData = self.columnSpec[columnIndex];
+          const columnStyle = ['mq-array-justify-' + columnData.type];
+          if (columnData.left) columnStyle.push('mq-array-border-left');
+          if (columnData.right) columnStyle.push('mq-array-border-right');
+          tds.push(
+            h.block(
+              'td',
+              {
+                class: columnStyle.join(' '),
+              },
+              cell
+            )
+          );
+        }
+      });
+      if (tds.length > 0) {
+        rows.push(h('tr', {}, tds));
+      }
+
+      let matrixHTML: HTMLElement[] = [];
+      matrixHTML.push(
+        h(
+          'table',
+          {
+            class: 'mq-non-left',
+          },
+          rows
+        )
+      );
+      return h(
+        'span',
+        {
+          class: 'mq-matrix mq-array mq-non-leaf',
+        },
+        matrixHTML
+      );
+    });
+    return Environment.prototype.html.call(this);
+  }
+  parseColumnSpec(specString: string) {
+    function getColumnType(char: string): string {
+      return { c: 'center', l: 'left', r: 'right' }[char] ?? 'c';
+    }
+    let leftBorder = false;
+    let columnTypes: { type: string; right: boolean; left: boolean }[] = [];
+    for (const char of specString) {
+      if (char === '|') {
+        if (columnTypes.length === 0) {
+          leftBorder = true;
+        } else {
+          columnTypes[columnTypes.length - 1].right = true;
+        }
+        continue;
+      }
+      columnTypes.push({
+        type: getColumnType(char),
+        right: false,
+        left: false,
+      });
+    }
+    // If we've exited without adding column types, then there's separator shenanigans
+    if (columnTypes.length === 0) {
+      columnTypes.push({ type: 'c', right: false, left: false });
+      columnTypes.push({ type: 'c', right: false, left: false });
+    }
+    if (leftBorder) {
+      columnTypes[0].left = true;
+    }
+    this.columnSpecString = specString;
+    this.columnSpec = columnTypes;
   }
 }
 
@@ -2362,7 +2451,7 @@ EnvironmentCmds.Bmatrix = () => new Matrix('{', '}', 'Bmatrix');
 EnvironmentCmds.vmatrix = () => new Matrix('|', '|', 'vmatrix');
 EnvironmentCmds.Vmatrix = () => new Matrix('&#8741;', '&#8741;', 'Vmatrix');
 EnvironmentCmds.cases = () => new Matrix('{', '', 'cases');
-// EnvironmentCmds.array = () => new LatexArray('a', 'a', 'array');
+EnvironmentCmds.array = () => new LatexArray();
 
 class MatrixCell extends MathBlock {
   row;
