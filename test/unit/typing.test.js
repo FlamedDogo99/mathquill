@@ -1314,8 +1314,7 @@ suite('typing with auto-replaces', function () {
 
     test('command is a built-in operator name', function () {
       var cmds = (
-        'Pr arg deg det dim exp gcd hom inf ker lg ln log max min sup' +
-        ' limsup liminf injlim projlim Pr'
+        'arg deg det dim exp gcd hom ker lg ln log max min' + ' injlim projlim'
       ).split(' ');
       for (var i = 0; i < cmds.length; i += 1) {
         assert.throws(function () {
@@ -1327,7 +1326,7 @@ suite('typing with auto-replaces', function () {
     test('built-in operator names even after auto-operator names overridden', function () {
       MQ.config({ autoOperatorNames: 'sin inf arcosh cosh cos cosec csc' });
       // ^ happen to be the ones required by autoOperatorNames.test.js
-      var cmds = 'Pr arg deg det exp gcd inf lg ln log max min sup'.split(' ');
+      var cmds = 'arg deg det exp gcd lg ln log max min'.split(' ');
       for (var i = 0; i < cmds.length; i += 1) {
         assert.throws(function () {
           MQ.config({ autoCommands: cmds[i] });
