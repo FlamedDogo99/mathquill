@@ -530,27 +530,31 @@
 .mq-array > table {
   border-collapse: collapse;
 }
-
-.mq-array > table > tr > td.mq-vertical-separator {
-  padding: 0px;
-  border-left: 1px solid #000000;
-  padding-left: 0.1em;
-  padding-right: 0.1em;
-}
-.mq-array > table > tr > td {
-  padding-left: 0.4em;
-  padding-right: 0.4em;
-  padding-top: 0.2em;
-  padding-bottom: 0.2em;
+.mq-array > table tr > td.mq-vertical-separator {
+  background-image: linear-gradient(#000, #000);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: center center;
+  padding-left: 1.5px;
+  padding-right: 1.5px;
 }
 
-.mq-array > table > tr > td.mq-array-justify-r {
+.mq-array > table tr > td.mq-array-block-padding {
+  padding: 0;
+}
+td.mq-array-block-padding > span {
+  padding: 0.1em 0.3em;
+  display: block;
+  margin: 1.5px;
+}
+
+.mq-array > table tr > td.mq-array-justify-r {
   text-align: right;
 }
-.mq-array > table > tr > td.mq-array-justify-l {
+.mq-array > table tr > td.mq-array-justify-l {
   text-align: left;
 }
-.mq-array > table > tr > td.mq-array-justify-c {
+.mq-array > table tr > td.mq-array-justify-c {
   text-align: center;
 }
 

@@ -2332,14 +2332,13 @@ class LatexArray extends Matrix {
     this.parseColumnSpec('cc');
   }
   wrappers() {
-    const wrappers = [
+    return [
       this.template[0].join(this.environment) +
         '{' +
         this.columnSpecString +
         '}',
       this.template[1].join(this.environment),
     ];
-    return wrappers;
   }
   parser() {
     const self = this;
@@ -2377,14 +2376,16 @@ class LatexArray extends Matrix {
           }
           // FIXME: Currently if columnSpec isn't long enough, we treat each following column as center justified. This is not how overleaf's array environment behaves, but allows for multiple vertical bars in the array.
           tds.push(
-            h.block(
+            h(
               'td',
               {
                 class:
+                  'mq-array-block-padding' +
+                  ' ' +
                   'mq-array-justify-' +
                   (self.columnSpec[tds.length ?? 0] ?? 'c'),
               },
-              cell
+              [h.block('span', {}, cell)]
             )
           );
           for (const _ in self.columnSpec) {
