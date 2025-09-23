@@ -2326,12 +2326,10 @@ class Matrix extends Environment {
 
 class LatexArray extends Matrix {
   columnSpecString: string = 'cc';
-  columnSpec: { type: string; right: boolean; left: boolean }[] = [
-    { type: 'center', right: false, left: false },
-    { type: 'center', right: false, left: false },
-  ];
+  columnSpec: string[];
   constructor() {
     super('', '', 'array');
+    this.parseColumnSpec('cc');
   }
   wrappers() {
     const wrappers = [
@@ -2370,20 +2368,32 @@ class LatexArray extends Matrix {
             tds.length = 0;
           }
           row = cell.row;
-          const columnIndex = Math.min(self.columnSpec.length - 1, tds.length);
-          const columnData = self.columnSpec[columnIndex];
-          const columnStyle = ['mq-array-justify-' + columnData.type];
-          if (columnData.left) columnStyle.push('mq-array-border-left');
-          if (columnData.right) columnStyle.push('mq-array-border-right');
+          for (const _ in self.columnSpec) {
+            if ((self.columnSpec[tds.length ?? 0] ?? 'c') === '|') {
+              tds.push(h('td', { class: 'mq-vertical-separator' }));
+            } else {
+              break;
+            }
+          }
+          // FIXME: Currently if columnSpec isn't long enough, we treat each following column as center justified. This is not how overleaf's array environment behaves, but allows for multiple vertical bars in the array.
           tds.push(
             h.block(
               'td',
               {
-                class: columnStyle.join(' '),
+                class:
+                  'mq-array-justify-' +
+                  (self.columnSpec[tds.length ?? 0] ?? 'c'),
               },
               cell
             )
           );
+          for (const _ in self.columnSpec) {
+            if ((self.columnSpec[tds.length ?? 0] ?? 'c') === '|') {
+              tds.push(h('td', { class: 'mq-vertical-separator' }));
+            } else {
+              break;
+            }
+          }
         }
       });
       if (tds.length > 0) {
@@ -2411,36 +2421,8 @@ class LatexArray extends Matrix {
     return Environment.prototype.html.call(this);
   }
   parseColumnSpec(specString: string) {
-    function getColumnType(char: string): string {
-      return { c: 'center', l: 'left', r: 'right' }[char] ?? 'c';
-    }
-    let leftBorder = false;
-    let columnTypes: { type: string; right: boolean; left: boolean }[] = [];
-    for (const char of specString) {
-      if (char === '|') {
-        if (columnTypes.length === 0) {
-          leftBorder = true;
-        } else {
-          columnTypes[columnTypes.length - 1].right = true;
-        }
-        continue;
-      }
-      columnTypes.push({
-        type: getColumnType(char),
-        right: false,
-        left: false,
-      });
-    }
-    // If we've exited without adding column types, then there's separator shenanigans
-    if (columnTypes.length === 0) {
-      columnTypes.push({ type: 'c', right: false, left: false });
-      columnTypes.push({ type: 'c', right: false, left: false });
-    }
-    if (leftBorder) {
-      columnTypes[0].left = true;
-    }
     this.columnSpecString = specString;
-    this.columnSpec = columnTypes;
+    this.columnSpec = specString.split('');
   }
 }
 
