@@ -2326,10 +2326,8 @@ class Matrix extends Environment {
 
 class LatexArray extends Matrix {
   columnSpecString: string = 'cc';
-  columnSpec: string[];
   constructor() {
     super('', '', 'array');
-    this.parseColumnSpec('cc');
   }
   wrappers() {
     return [
@@ -2349,7 +2347,7 @@ class LatexArray extends Matrix {
       .then(regex(/^[clr|]+/i))
       .skip(string('}'))
       .then(function (columnSpec) {
-        self.parseColumnSpec(columnSpec);
+        self.columnSpecString = columnSpec;
         return parent.call(self); // Get matrix functionality
       });
   }
@@ -2367,8 +2365,8 @@ class LatexArray extends Matrix {
             tds.length = 0;
           }
           row = cell.row;
-          for (const _ in self.columnSpec) {
-            if ((self.columnSpec[tds.length ?? 0] ?? 'c') === '|') {
+          for (const _ of self.columnSpecString) {
+            if (self.columnSpecString[tds.length ?? 0] === '|') {
               tds.push(h('td', { class: 'mq-vertical-separator' }));
             } else {
               break;
@@ -2383,13 +2381,13 @@ class LatexArray extends Matrix {
                   'mq-array-block-padding' +
                   ' ' +
                   'mq-array-justify-' +
-                  (self.columnSpec[tds.length ?? 0] ?? 'c'),
+                  (self.columnSpecString[tds.length ?? 0] ?? 'c'),
               },
               [h.block('span', {}, cell)]
             )
           );
-          for (const _ in self.columnSpec) {
-            if ((self.columnSpec[tds.length ?? 0] ?? 'c') === '|') {
+          for (const _ of self.columnSpecString) {
+            if ((self.columnSpecString[tds.length ?? 0] ?? 'c') === '|') {
               tds.push(h('td', { class: 'mq-vertical-separator' }));
             } else {
               break;
@@ -2420,10 +2418,6 @@ class LatexArray extends Matrix {
       );
     });
     return Environment.prototype.html.call(this);
-  }
-  parseColumnSpec(specString: string) {
-    this.columnSpecString = specString;
-    this.columnSpec = specString.split('');
   }
 }
 
