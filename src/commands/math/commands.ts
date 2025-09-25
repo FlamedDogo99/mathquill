@@ -2325,9 +2325,11 @@ class Matrix extends Environment {
 }
 
 class LatexArray extends Matrix {
-  columnSpecString: string = 'cc';
+  columnSpecs: { justify: any; left: string; right: string }[];
+  columnSpecString: string;
   constructor() {
     super('', '', 'array');
+    this.columnSpecParser('cc');
   }
   wrappers() {
     return [
@@ -2347,13 +2349,54 @@ class LatexArray extends Matrix {
       .then(regex(/^[clr|]+/i))
       .skip(string('}'))
       .then(function (columnSpec) {
-        self.columnSpecString = columnSpec;
-        return parent.call(self); // Get matrix functionality
+        return parent.call(self).then(function () {
+          return self.columnSpecParser(columnSpec);
+        });
       });
+  }
+  columnSpecParser(columnSpecString: string) {
+    let processedSpecs = [];
+    let leftBars: string = '';
+    let rightBars: string = '';
+    for (const char of columnSpecString) {
+      if (char === '|') {
+        if (processedSpecs.length === 0) {
+          leftBars += char;
+        } else {
+          rightBars += char;
+        }
+        continue;
+      }
+      if (rightBars) {
+        processedSpecs[processedSpecs.length - 1].right = rightBars;
+        rightBars = '';
+      }
+      const column = {
+        justify: char,
+        left: '',
+        right: '',
+      };
+      processedSpecs.push(column);
+      if (leftBars) {
+        processedSpecs[processedSpecs.length - 1].left = leftBars;
+        leftBars = '';
+      }
+    }
+    if (rightBars) {
+      processedSpecs[processedSpecs.length - 1].right = rightBars;
+    }
+    this.columnSpecs = processedSpecs;
+    this.columnSpecString = columnSpecString;
+    if (processedSpecs.length !== this.rowSize || processedSpecs.length === 0) {
+      return Parser.fail('columnSpecs does not match rowSize');
+    } else {
+      return Parser.succeed(this);
+    }
   }
 
   html() {
     let row: number = -1;
+    let column: number = 0;
     let self = this;
     this.domView = new DOMView(0, (blocks) => {
       let rows: HTMLElement[] = [];
@@ -2363,16 +2406,14 @@ class LatexArray extends Matrix {
           if (row !== cell.row && tds.length > 0) {
             rows.push(h('tr', {}, tds));
             tds.length = 0;
+            column = 0;
           }
           row = cell.row;
-          for (const _ of self.columnSpecString) {
-            if (self.columnSpecString[tds.length ?? 0] === '|') {
-              tds.push(h('td', { class: 'mq-vertical-separator' }));
-            } else {
-              break;
-            }
+          //TODO: Add support for ":" for dotted vertical separator
+          const columnSpec = self.columnSpecs[column];
+          for (const _ of columnSpec.left) {
+            tds.push(h('td', { class: 'mq-vertical-separator' }));
           }
-          // FIXME: Currently if columnSpec isn't long enough, we treat each following column as center justified. This is not how overleaf's array environment behaves, but allows for multiple vertical bars in the array.
           tds.push(
             h(
               'td',
@@ -2381,18 +2422,15 @@ class LatexArray extends Matrix {
                   'mq-array-block-padding' +
                   ' ' +
                   'mq-array-justify-' +
-                  (self.columnSpecString[tds.length ?? 0] ?? 'c'),
+                  self.columnSpecs[column].justify,
               },
               [h.block('span', {}, cell)]
             )
           );
-          for (const _ of self.columnSpecString) {
-            if ((self.columnSpecString[tds.length ?? 0] ?? 'c') === '|') {
-              tds.push(h('td', { class: 'mq-vertical-separator' }));
-            } else {
-              break;
-            }
+          for (const _ of columnSpec.right) {
+            tds.push(h('td', { class: 'mq-vertical-separator' }));
           }
+          column++;
         }
       });
       if (tds.length > 0) {
@@ -2419,6 +2457,7 @@ class LatexArray extends Matrix {
     });
     return Environment.prototype.html.call(this);
   }
+  //FIXME: Matrix API commands break when array contains dividers
 }
 
 EnvironmentCmds.matrix = () => new Matrix('', '', 'matrix');
