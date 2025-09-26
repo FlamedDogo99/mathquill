@@ -2393,6 +2393,17 @@ class LatexArray extends Matrix {
       return Parser.succeed(this);
     }
   }
+  columnSpecUnparser(
+    columnSpecs: { justify: any; left: string; right: string }[]
+  ) {
+    let columnSpecString = '';
+    for (const column of columnSpecs) {
+      if (column.left) columnSpecString += column.left;
+      columnSpecString += column.justify;
+      if (column.right) columnSpecString += column.right;
+    }
+    return columnSpecString;
+  }
 
   html() {
     let row: number = -1;
@@ -2457,7 +2468,123 @@ class LatexArray extends Matrix {
     });
     return Environment.prototype.html.call(this);
   }
-  //FIXME: Matrix API commands break when array contains dividers
+  addColumn(blockIndex: number, dir?: any) {
+    let rowSize = this.rowSize;
+    let columnIndex = blockIndex % rowSize;
+    let rowIndex = 0;
+    let self = this;
+    if (dir !== 1 && dir !== -1) {
+      dir = 1;
+    }
+
+    const spliceColumn = this.columnSpecs[columnIndex];
+    const defaultColumnSpec = { justify: 'c', left: '', right: '' };
+    if (dir === 1) {
+      defaultColumnSpec.right = spliceColumn.right;
+      spliceColumn.right = '';
+    } else {
+      defaultColumnSpec.left = spliceColumn.left;
+      spliceColumn.left = '';
+    }
+
+    this.columnSpecs.splice(
+      columnIndex + (dir === 1 ? 1 : 0),
+      0,
+      defaultColumnSpec
+    );
+    this.columnSpecString = this.columnSpecUnparser(this.columnSpecs);
+
+    while (columnIndex < this.blocks.length) {
+      let arrayCell = new MatrixCell(rowIndex, self);
+      arrayCell.setDOM(h('span', { class: 'mq-empty' }, []));
+      domFrag(
+        h(
+          'td',
+          {
+            class:
+              'mq-array-block-padding' +
+              ' ' +
+              'mq-array-justify-' +
+              defaultColumnSpec.justify,
+          },
+          [arrayCell.domFrag().oneElement()]
+        )
+      )
+        .insDirOf(dir as Direction, this.blocks[columnIndex].domFrag().parent())
+        .oneElement();
+
+      NodeBase.linkElementByBlockNode(
+        arrayCell.domFrag().oneElement(),
+        arrayCell
+      );
+      this.blocks.splice(columnIndex + (dir === 1 ? 1 : 0), 0, arrayCell);
+      columnIndex += rowSize + 1;
+      rowIndex++;
+    }
+
+    this.rowSize++;
+    this.finalizeTree();
+  }
+
+  addRow(basecellindex: number, dir?: any) {
+    let rowSize = this.rowSize;
+    let self = this;
+    if (dir !== 1 && dir !== -1) {
+      dir = 1;
+    }
+    let rowIndex = Math.floor(basecellindex / rowSize) + (dir === 1 ? 1 : 0);
+    let index = rowIndex * rowSize;
+
+    let tr = domFrag(h('tr', {}, []));
+    if (dir === 1) {
+      tr.insertAfter(this.blocks[index - 1].domFrag().parent().parent());
+    } else {
+      tr.insertBefore(this.blocks[index].domFrag().parent().parent());
+    }
+
+    for (let columnIndex = 0; columnIndex < rowSize; columnIndex++) {
+      let arrayCell = new MatrixCell(rowIndex, self);
+      const columnSpec = self.columnSpecs[columnIndex];
+      for (const _ of columnSpec.left) {
+        domFrag(h('td', { class: 'mq-vertical-separator' })).appendTo(
+          tr.oneElement()
+        );
+      }
+      arrayCell.setDOM(h('span', { class: 'mq-empty' }, []));
+      domFrag(
+        h(
+          'td',
+          {
+            class:
+              'mq-array-block-padding' +
+              ' ' +
+              'mq-array-justify-' +
+              self.columnSpecs[columnIndex].justify,
+          },
+          [arrayCell.domFrag().oneElement()]
+        )
+      )
+        .appendTo(tr.oneElement())
+        .oneElement();
+      for (const _ of columnSpec.right) {
+        domFrag(h('td', { class: 'mq-vertical-separator' })).appendTo(
+          tr.oneElement()
+        );
+      }
+      NodeBase.linkElementByBlockNode(
+        arrayCell.domFrag().oneElement(),
+        arrayCell
+      );
+      this.blocks.splice(index, 0, arrayCell);
+      index++;
+    }
+    for (let i = index; i < this.blocks.length; i++) {
+      this.blocks[i].row++;
+    }
+
+    this.finalizeTree();
+  }
+  //FIXME: Unable to remove rows, columns or cells through user interaction or Matrix command API without breaking layout
 }
 
 EnvironmentCmds.matrix = () => new Matrix('', '', 'matrix');
