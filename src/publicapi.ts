@@ -413,36 +413,36 @@ function getInterface(v: number): MathQuill.v3.API | MathQuill.v1.API {
       return EnvironmentCmds[command] ?? false;
     }
     matrixCmd(cmd: string, ...args: unknown[]) {
-      var ctrlr = this.__controller.notify(undefined),
-        cursor = ctrlr.cursor;
+      let controller = this.__controller.notify(undefined),
+        cursor = controller.cursor;
 
       if (
-        cursor.parent instanceof MatrixCell &&
-        cursor.parent.parent instanceof Matrix
+        cursor.parent instanceof TabularCell &&
+        cursor.parent.parent instanceof Tabular
       ) {
-        var blockindex = cursor.parent.parent.blocks.indexOf(
-          cursor.parent as MatrixCell
+        let blockIndex = cursor.parent.parent.blocks.indexOf(
+          cursor.parent as TabularCell
         );
         if (cmd === 'addColumn') {
-          cursor.parent.parent.addColumn(blockindex, args[0]);
+          cursor.parent.parent.addColumn(blockIndex, args[0]);
         } else if (cmd === 'addRow') {
-          cursor.parent.parent.addRow(blockindex, args[0]);
+          cursor.parent.parent.addRow(blockIndex, args[0]);
         } else if (cmd === 'deleteColumn') {
-          cursor.parent.parent.deleteColumn(blockindex, cursor);
+          cursor.parent.parent.deleteColumn(blockIndex, cursor);
         } else if (cmd === 'deleteRow') {
-          cursor.parent.parent.deleteRow(blockindex, cursor);
+          cursor.parent.parent.deleteRow(blockIndex, cursor);
         }
         this.reflow();
       } else if (cmd === 'new' && args.length === 3) {
-        let envtype = args[0];
+        let environmentType = args[0];
         let rows = args[1];
         let cols = args[2];
         if (
-          EnvironmentCmds.hasOwnProperty(envtype as PropertyKey) &&
+          EnvironmentCmds.hasOwnProperty(environmentType as PropertyKey) &&
           typeof rows === 'number' &&
           typeof cols === 'number'
         ) {
-          let latex = '\\begin{' + envtype + '}';
+          let latex = '\\begin{' + environmentType + '}';
           let row = '';
           for (let i = 0; i < cols - 1; i++) {
             row += '&';
@@ -453,22 +453,22 @@ function getInterface(v: number): MathQuill.v3.API | MathQuill.v1.API {
             }
             latex += row;
           }
-          latex += '\\end{' + envtype + '}';
-          ctrlr.writeLatex(latex);
+          latex += '\\end{' + environmentType + '}';
+          controller.writeLatex(latex);
           this.reflow();
           // place cursor in first cell
-          if (cursor[L] instanceof Matrix) {
-            let cursorL = cursor[L] as Matrix;
+          if (cursor[L] instanceof Tabular) {
+            let cursorL = cursor[L] as Tabular;
             if (cursorL.blocks) {
-              let firstcell = cursorL.blocks[0];
-              cursor.insAtLeftEnd(firstcell);
+              let firstCell = cursorL.blocks[0];
+              cursor.insAtLeftEnd(firstCell);
             }
           }
         }
       }
 
-      ctrlr.scrollHoriz();
-      if (ctrlr.blurred) cursor.hide().parent.blur(cursor);
+      controller.scrollHoriz();
+      if (controller.blurred) cursor.hide().parent.blur(cursor);
       return this;
     }
     select() {

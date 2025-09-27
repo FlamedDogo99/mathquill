@@ -7,6 +7,7 @@
     <list default="true" id="c53935fa-4aae-4e8e-95d0-96deb69df77a" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/commands/math/commands.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands/math/commands.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/publicapi.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/publicapi.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,6 +74,8 @@
       <workItem from="1758817961502" duration="788000" />
       <workItem from="1758831071043" duration="4990000" />
       <workItem from="1758848333204" duration="276000" />
+      <workItem from="1758848756000" duration="9534000" />
+      <workItem from="1758937166611" duration="3563000" />
     </task>
     <servers />
   </component>
