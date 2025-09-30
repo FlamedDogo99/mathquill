@@ -2103,17 +2103,123 @@ abstract class Tabular extends Environment {
     columnIndex: number
   ): void;
 
-  abstract backspace(
+  backspace(
     cell: TabularCell,
     dir: Direction,
     cursor: Cursor,
     finalDeleteCallback: Function
-  ): void;
-  abstract remove(): this;
-  abstract deleteColumn(cellIndex: number, cursor: Cursor): void;
+  ) {
+    var dirCell = cell[dir];
+    if (cell.isEmpty()) {
+      this.deleteCell(cell, cursor);
+      while (
+        dirCell &&
+        dirCell[dir] &&
+        this.blocks.indexOf(dirCell as TabularCell) === -1
+      ) {
+        dirCell = dirCell[dir];
+      }
+      if (dirCell) {
+        cursor.insAtDirEnd(-dir as Direction, dirCell);
+      }
+      if (this.blocks.length === 1 && this.blocks[0].isEmpty()) {
+        finalDeleteCallback();
+        this.finalizeTree();
+      }
+      this.bubble(function (node) {
+        node.reflow();
+        return undefined;
+      });
+    }
+  }
+  remove() {
+    this.blocks.forEach(function (cell) {
+      cell.remove();
+    });
+    this.domFrag().remove();
+    return this.disown();
+  }
+
   abstract deleteRow(cellIndex: number, cursor: Cursor): void;
-  abstract deleteCell(currentCell: TabularCell): void;
+
+  deleteColumn(cellIndex: number, cursor: Cursor) {
+    let rowSize = this.rowSize;
+    let columnIndex = cellIndex % rowSize;
+    let rowIndex = Math.floor(cellIndex / rowSize);
+
+    if (rowSize == 1) {
+      cursor.insRightOf(this);
+      this.remove();
+      return;
+    }
+
+    let currentColumn = columnIndex;
+    while (currentColumn < this.blocks.length) {
+      this.blocks[currentColumn].remove();
+      this.blocks.splice(currentColumn, 1);
+      currentColumn += rowSize - 1;
+    }
+
+    this.rowSize--;
+
+    if (columnIndex < this.rowSize) {
+      cursor.insAtRightEnd(this.blocks[rowIndex * this.rowSize + columnIndex]);
+    } else {
+      cursor.insAtRightEnd(
+        this.blocks[rowIndex * this.rowSize + columnIndex - 1]
+      );
+    }
+    this.finalizeTree();
+  }
+
+  deleteCell(deleteCell: MatrixCell, cursor: Cursor) {
+    let blocks = this.blocks;
+
+    const blockIndex = blocks.indexOf(deleteCell);
+    if (!blockIndex) return;
+    const rowSize = this.rowSize;
+    const deleteRow = deleteCell.row;
+    const deleteColumn = blockIndex % rowSize;
+    let rowCount = 0;
+    let columnCount = 0;
+
+    function columnEmpty() {
+      for (
+        let cellIndex = deleteColumn;
+        cellIndex < blocks.length;
+        cellIndex += rowSize
+      ) {
+        columnCount++;
+        const currentCell = blocks[cellIndex];
+        if (!currentCell.isEmpty()) return false;
+      }
+      return true;
+    }
+    function rowEmpty() {
+      const startIndex = deleteRow * rowSize;
+      for (
+        let cellIndex = startIndex;
+        cellIndex < startIndex + rowSize;
+        cellIndex += 1
+      ) {
+        rowCount++;
+        const currentCell = blocks[cellIndex];
+        if (!currentCell.isEmpty()) return false;
+      }
+      return true;
+    }
+    const isRowEmpty = rowEmpty();
+    const isColumnEmpty = columnEmpty();
+    if (isRowEmpty && rowCount > 0) {
+      this.deleteRow(blockIndex, cursor);
+    }
+    if (isColumnEmpty && columnCount > 0) {
+      this.deleteColumn(blockIndex, cursor);
+    }
+    this.finalizeTree();
+  }
 }
+
 class TabularCell extends MathBlock {
   row;
 
@@ -2124,8 +2230,8 @@ class TabularCell extends MathBlock {
       this.adopt(parent, parent.getEnd(R), 0);
     }
     if (replaces) {
-      for (var i = 0; i < replaces.length; i++) {
-        replaces[i].children().adopt(this, this.ends[R], 0);
+      for (const replace of replaces) {
+        replace.children().adopt(this, this.ends[R], 0);
       }
     }
   }
@@ -2230,109 +2336,10 @@ class Matrix extends Tabular {
     );
   }
 
-  deleteCell(currentCell: MatrixCell) {
-    var rows: MatrixCell[][] = [],
-      columns: MatrixCell[][] = [],
-      myRow: MatrixCell[] = [],
-      myColumn: MatrixCell[] = [];
-    var blocks = this.blocks,
-      row = -1,
-      column = 0;
-
-    // Create arrays for cells in the current row / column
-    blocks.forEach(function (cell) {
-      if (row !== cell.row) {
-        row = cell.row;
-        rows[row] = [];
-        column = 0;
-      }
-      columns[column] = columns[column] || [];
-      columns[column].push(cell);
-      rows[row].push(cell);
-
-      if (cell === currentCell) {
-        myRow = rows[row];
-        myColumn = columns[column];
-      }
-
-      column += 1;
-    });
-
-    function isEmpty(cells: MatrixCell[]) {
-      var empties = [];
-      for (var i = 0; i < cells.length; i += 1) {
-        if (cells[i].isEmpty()) empties.push(cells[i]);
-      }
-      return empties.length === cells.length;
-    }
-
-    function remove(cells: MatrixCell[]) {
-      for (var i = 0; i < cells.length; i += 1) {
-        if (blocks.indexOf(cells[i]) > -1) {
-          cells[i].remove();
-          blocks.splice(blocks.indexOf(cells[i]), 1);
-        }
-      }
-    }
-
-    if (isEmpty(myRow) && myColumn.length > 1) {
-      row = rows.indexOf(myRow);
-      // Decrease all following row numbers
-      blocks.forEach(function (cell) {
-        if (cell.row > row) cell.row -= 1;
-      });
-      // Dispose of cells and remove <tr>
-      remove(myRow);
-      /*  removed for now - not sure what we need to do
-        this.jQ.find('tr').eq(row).remove();
-      */
-      /* 
-        hacky fix, since tr's aren't tethered to anything
-      */
-      let tofix = this.domFrag().oneElement().querySelectorAll('tr');
-      tofix.forEach(function (el) {
-        if (!el.querySelector('td')) {
-          el.remove();
-        }
-      });
-    }
-    if (isEmpty(myColumn) && myRow.length > 1) {
-      remove(myColumn);
-    }
-    this.finalizeTree();
-  }
-  deleteColumn(basecellindex: number, cursor: Cursor) {
-    var rowSize = this.rowSize;
-    var colnum = basecellindex % rowSize;
-    var rownum = Math.floor(basecellindex / rowSize);
-
-    if (rowSize == 1) {
-      cursor.insRightOf(this);
-      this.remove();
-      return;
-    }
-
-    let curcol = colnum;
-    while (curcol < this.blocks.length) {
-      this.blocks[curcol].remove();
-      this.blocks.splice(curcol, 1);
-      curcol += rowSize - 1;
-    }
-
-    this.rowSize--;
-
-    if (colnum < this.rowSize) {
-      cursor.insAtRightEnd(this.blocks[rownum * this.rowSize + colnum]);
-    } else {
-      cursor.insAtRightEnd(this.blocks[rownum * this.rowSize + colnum - 1]);
-    }
-
-    this.finalizeTree();
-  }
-  deleteRow(basecellindex: number, cursor: Cursor) {
-    var rowSize = this.rowSize;
-    var rownum = Math.floor(basecellindex / rowSize);
-    var index = rownum * rowSize;
+  deleteRow(cellIndex: number, cursor: Cursor) {
+    let rowSize = this.rowSize;
+    let rowIndex = Math.floor(cellIndex / rowSize);
+    let currentIndex = rowIndex * rowSize;
 
     if (this.blocks.length == rowSize) {
       cursor.insRightOf(this);
@@ -2341,9 +2348,9 @@ class Matrix extends Tabular {
     }
 
     for (let i = 0; i < rowSize; i++) {
-      this.blocks[index + i].remove();
+      this.blocks[currentIndex + i].remove();
     }
-    this.blocks.splice(index, rowSize);
+    this.blocks.splice(currentIndex, rowSize);
 
     //hacky tr cleanup
     let tofix = this.domFrag().oneElement().querySelectorAll('tr');
@@ -2353,14 +2360,14 @@ class Matrix extends Tabular {
       }
     });
 
-    for (let i = index; i < this.blocks.length; i++) {
+    for (let i = currentIndex; i < this.blocks.length; i++) {
       this.blocks[i].row--;
     }
 
-    if (basecellindex < this.blocks.length) {
-      cursor.insAtRightEnd(this.blocks[basecellindex]);
+    if (cellIndex < this.blocks.length) {
+      cursor.insAtRightEnd(this.blocks[cellIndex]);
     } else {
-      cursor.insAtRightEnd(this.blocks[basecellindex - rowSize]);
+      cursor.insAtRightEnd(this.blocks[cellIndex - rowSize]);
     }
 
     this.finalizeTree();
@@ -2386,43 +2393,6 @@ class Matrix extends Tabular {
         .insDirOf(dir as Direction, this.blocks[columnIndex].domFrag())
         .oneElement()
     );
-  }
-
-  backspace(
-    cell: MatrixCell,
-    dir: Direction,
-    cursor: Cursor,
-    finalDeleteCallback: Function
-  ) {
-    var dirwards = cell[dir];
-    if (cell.isEmpty()) {
-      this.deleteCell(cell);
-      while (
-        dirwards &&
-        dirwards[dir] &&
-        this.blocks.indexOf(dirwards as MatrixCell) === -1
-      ) {
-        dirwards = dirwards[dir];
-      }
-      if (dirwards) {
-        cursor.insAtDirEnd(-dir as Direction, dirwards);
-      }
-      if (this.blocks.length === 1 && this.blocks[0].isEmpty()) {
-        finalDeleteCallback();
-        this.finalizeTree();
-      }
-      this.bubble(function (node) {
-        node.reflow();
-        return undefined;
-      });
-    }
-  }
-  remove() {
-    this.blocks.forEach(function (cell) {
-      cell.remove();
-    });
-    this.domFrag().remove();
-    return this.disown();
   }
 }
 
@@ -2644,26 +2614,27 @@ class LatexArray extends Tabular {
       tr.insertBefore(this.blocks[index].domFrag().parent().parent());
     }
   }
-  //TODO: Implement
-  backspace(
-    _cell: TabularCell,
-    _dir: Direction,
-    _cursor: Cursor,
-    _finalDeleteCallback: Function
-  ): void {
-    throw new Error('backspace not implemented.');
+  deleteColumn(cellIndex: number, cursor: Cursor): void {
+    const columnSpecs = this.columnSpecs;
+    const rowSize = this.rowSize;
+    const columnIndex = cellIndex % rowSize;
+    const removedSpec = columnSpecs[columnIndex];
+    if (columnIndex > 0) {
+      columnSpecs[columnIndex - 1].right += removedSpec.right;
+    } else if (columnIndex < rowSize) {
+      columnSpecs[1].left += removedSpec.right;
+    }
+    columnSpecs.splice(columnIndex, 1);
+    this.columnSpecString = this.columnSpecUnparser(columnSpecs);
+    super.deleteColumn(cellIndex, cursor);
   }
+  //TODO: Implement
+
   remove(): this {
     throw new Error('remove not implemented.');
   }
-  deleteColumn(_cellIndex: number, _cursor: Cursor): void {
-    throw new Error('deleteColumn not implemented.');
-  }
   deleteRow(_cellIndex: number, _cursor: Cursor): void {
     throw new Error('deleteRow not implemented.');
-  }
-  deleteCell(_currentCell: TabularCell): void {
-    throw new Error('deleteCell not implemented.');
   }
 }
 
