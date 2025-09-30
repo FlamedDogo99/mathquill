@@ -1,3 +1,5 @@
+import HTML = Mocha.reporters.HTML;
+
 /***************************
  * Commands and Operators.
  **************************/
@@ -1740,6 +1742,7 @@ class Environment extends MathCommand {
   }
 }
 abstract class Tabular extends Environment {
+  Cell: typeof TabularCell;
   blocks: TabularCell[];
   rowSize: number;
   mathspeakTemplate: string[];
@@ -1747,10 +1750,10 @@ abstract class Tabular extends Environment {
   abstract delimiters: { column: string; row: string };
   protected constructor(environment: string) {
     super();
-
     this.environment = environment;
     this.blocks = [];
     this.rowSize = 0;
+    this.Cell = TabularCell;
   }
 
   latex() {
@@ -1807,11 +1810,12 @@ abstract class Tabular extends Environment {
     return super.html();
   }
   createBlocks() {
+    const Cell = this.Cell;
     this.blocks = [
-      new TabularCell(0, this),
-      new TabularCell(0, this),
-      new TabularCell(1, this),
-      new TabularCell(1, this),
+      new Cell(0, this),
+      new Cell(0, this),
+      new Cell(1, this),
+      new Cell(1, this),
     ];
   }
   parser() {
@@ -1837,7 +1841,7 @@ abstract class Tabular extends Environment {
 
         function addCell() {
           if (blocks.length > 0) {
-            self.blocks.push(new TabularCell(row, self, blocks));
+            self.blocks.push(new self.Cell(row, self, blocks));
             cellIndex++;
           }
           blocks = [];
@@ -1859,14 +1863,14 @@ abstract class Tabular extends Environment {
                 items[itemIndex - 1] === self.delimiters.column)
             ) {
               // two in a row; empty cell
-              self.blocks.push(new TabularCell(row, self));
+              self.blocks.push(new self.Cell(row, self));
               cellIndex++;
             }
             if (
               item === self.delimiters.column &&
               itemIndex === items.length - 1
             ) {
-              self.blocks.push(new TabularCell(row, self));
+              self.blocks.push(new self.Cell(row, self));
               cellIndex++;
             }
             if (item === self.delimiters.row) {
@@ -1988,7 +1992,7 @@ abstract class Tabular extends Environment {
         shortfall = maxLength - rows[i].length;
         while (shortfall) {
           position = maxLength * i + rows[i].length;
-          blocks.splice(position, 0, new TabularCell(i, this));
+          blocks.splice(position, 0, new this.Cell(i, this));
           shortfall -= 1;
         }
       }
@@ -2005,7 +2009,7 @@ abstract class Tabular extends Environment {
     }
 
     while (columnIndex < this.blocks.length) {
-      let cell = new TabularCell(rowIndex, self);
+      let cell = new this.Cell(rowIndex, self);
       this.insertCell(cell, dir, columnIndex);
       NodeBase.linkElementByBlockNode(cell.domFrag().oneElement(), cell);
       this.blocks.splice(columnIndex + (dir === 1 ? 1 : 0), 0, cell);
@@ -2029,7 +2033,7 @@ abstract class Tabular extends Environment {
     this.insertRow(tr, index, dir);
 
     for (let columnIndex = 0; columnIndex < rowSize; columnIndex++) {
-      let cell = new TabularCell(rowIndex, self);
+      let cell = new this.Cell(rowIndex, self);
       this.insertRowCell(cell, tr, columnIndex);
       NodeBase.linkElementByBlockNode(cell.domFrag().oneElement(), cell);
       this.blocks.splice(index, 0, cell);
@@ -2088,21 +2092,6 @@ abstract class Tabular extends Environment {
 
     this.mathspeakTemplate = newTemplate;
   }
-  abstract createCell(cell: MathBlock): HTMLElement[];
-  abstract createRow(cells: HTMLElement[]): HTMLElement[];
-  abstract createContainer(rows: HTMLElement[]): HTMLElement;
-  abstract insertCell(
-    cell: TabularCell,
-    dir: Direction,
-    columnIndex: number
-  ): void;
-  abstract insertRow(tr: DOMFragment, index: number, dir?: any): void;
-  abstract insertRowCell(
-    cell: TabularCell,
-    tr: DOMFragment,
-    columnIndex: number
-  ): void;
-
   backspace(
     cell: TabularCell,
     dir: Direction,
@@ -2140,7 +2129,42 @@ abstract class Tabular extends Environment {
     return this.disown();
   }
 
-  abstract deleteRow(cellIndex: number, cursor: Cursor): void;
+  deleteRow(cellIndex: number, cursor: Cursor) {
+    let rowSize = this.rowSize;
+    let rowIndex = Math.floor(cellIndex / rowSize);
+    let currentIndex = rowIndex * rowSize;
+
+    if (this.blocks.length == rowSize) {
+      cursor.insRightOf(this);
+      this.remove();
+      return;
+    }
+
+    for (let i = 0; i < rowSize; i++) {
+      this.blocks[currentIndex + i].remove();
+    }
+    this.blocks.splice(currentIndex, rowSize);
+
+    //hacky tr cleanup
+    let tofix = this.domFrag().oneElement().querySelectorAll('tr');
+    tofix.forEach(function (el) {
+      if (!el.querySelector('td')) {
+        el.remove();
+      }
+    });
+
+    for (let i = currentIndex; i < this.blocks.length; i++) {
+      this.blocks[i].row--;
+    }
+
+    if (cellIndex < this.blocks.length) {
+      cursor.insAtRightEnd(this.blocks[cellIndex]);
+    } else {
+      cursor.insAtRightEnd(this.blocks[cellIndex - rowSize]);
+    }
+
+    this.finalizeTree();
+  }
 
   deleteColumn(cellIndex: number, cursor: Cursor) {
     let rowSize = this.rowSize;
@@ -2172,7 +2196,7 @@ abstract class Tabular extends Environment {
     this.finalizeTree();
   }
 
-  deleteCell(deleteCell: MatrixCell, cursor: Cursor) {
+  deleteCell(deleteCell: TabularCell, cursor: Cursor) {
     let blocks = this.blocks;
 
     const blockIndex = blocks.indexOf(deleteCell);
@@ -2218,6 +2242,20 @@ abstract class Tabular extends Environment {
     }
     this.finalizeTree();
   }
+  abstract createCell(cell: MathBlock): HTMLElement[];
+  abstract createRow(cells: HTMLElement[]): HTMLElement[];
+  abstract createContainer(rows: HTMLElement[]): HTMLElement;
+  abstract insertCell(
+    cell: TabularCell,
+    dir: Direction,
+    columnIndex: number
+  ): void;
+  abstract insertRow(tr: DOMFragment, index: number, dir?: any): void;
+  abstract insertRowCell(
+    cell: TabularCell,
+    tr: DOMFragment,
+    columnIndex: number
+  ): void;
 }
 
 class TabularCell extends MathBlock {
@@ -2336,43 +2374,6 @@ class Matrix extends Tabular {
     );
   }
 
-  deleteRow(cellIndex: number, cursor: Cursor) {
-    let rowSize = this.rowSize;
-    let rowIndex = Math.floor(cellIndex / rowSize);
-    let currentIndex = rowIndex * rowSize;
-
-    if (this.blocks.length == rowSize) {
-      cursor.insRightOf(this);
-      this.remove();
-      return;
-    }
-
-    for (let i = 0; i < rowSize; i++) {
-      this.blocks[currentIndex + i].remove();
-    }
-    this.blocks.splice(currentIndex, rowSize);
-
-    //hacky tr cleanup
-    let tofix = this.domFrag().oneElement().querySelectorAll('tr');
-    tofix.forEach(function (el) {
-      if (!el.querySelector('td')) {
-        el.remove();
-      }
-    });
-
-    for (let i = currentIndex; i < this.blocks.length; i++) {
-      this.blocks[i].row--;
-    }
-
-    if (cellIndex < this.blocks.length) {
-      cursor.insAtRightEnd(this.blocks[cellIndex]);
-    } else {
-      cursor.insAtRightEnd(this.blocks[cellIndex - rowSize]);
-    }
-
-    this.finalizeTree();
-  }
-
   insertRowCell(cell: TabularCell, tr: DOMFragment, _columnIndex: number) {
     cell.setDOM(
       domFrag(h('td', { class: 'mq-empty' }, []))
@@ -2395,6 +2396,17 @@ class Matrix extends Tabular {
     );
   }
 }
+class ArrayCell extends TabularCell {
+  constructor(row: number, parent: Matrix, replaces?: MathBlock[]) {
+    super(row, parent, replaces);
+  }
+  remove() {
+    const parent = this.domFrag().parent();
+    const disown = super.remove();
+    parent.remove();
+    return disown;
+  }
+}
 
 class LatexArray extends Tabular {
   ariaLabel: string = 'array';
@@ -2410,6 +2422,7 @@ class LatexArray extends Tabular {
   constructor() {
     super('array');
     this.columnSpecParser('cc');
+    this.Cell = ArrayCell;
   }
   wrappers() {
     return [
@@ -2628,13 +2641,19 @@ class LatexArray extends Tabular {
     this.columnSpecString = this.columnSpecUnparser(columnSpecs);
     super.deleteColumn(cellIndex, cursor);
   }
-  //TODO: Implement
-
-  remove(): this {
-    throw new Error('remove not implemented.');
-  }
-  deleteRow(_cellIndex: number, _cursor: Cursor): void {
-    throw new Error('deleteRow not implemented.');
+  deleteRow(cellIndex: number, cursor: Cursor) {
+    debugger;
+    const tr = this.blocks[cellIndex].domFrag().oneElement()
+      .parentElement?.parentElement;
+    if (tr instanceof HTMLElement) {
+      const verticalSeparators = Array.prototype.slice.call(
+        tr.getElementsByClassName('mq-vertical-separator')
+      );
+      for (const separator of verticalSeparators) {
+        separator.remove();
+      }
+    }
+    super.deleteRow(cellIndex, cursor);
   }
 }
 
@@ -2646,13 +2665,6 @@ EnvironmentCmds.vmatrix = () => new Matrix('|', '|', 'vmatrix');
 EnvironmentCmds.Vmatrix = () => new Matrix('&#8741;', '&#8741;', 'Vmatrix');
 EnvironmentCmds.cases = () => new Matrix('{', '', 'cases');
 EnvironmentCmds.array = () => new LatexArray();
-
-class MatrixCell extends TabularCell {
-  constructor(row: number, parent: Matrix, replaces?: MathBlock[]) {
-    super(row, parent, replaces);
-    //TODO: check if there's any reason to have a separate matrix cell
-  }
-}
 
 class LimitNotation extends MathCommand {
   constructor(ch: string, displayText: string, ariaLabel?: string) {
