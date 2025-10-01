@@ -1,5 +1,3 @@
-import HTML = Mocha.reporters.HTML;
-
 /***************************
  * Commands and Operators.
  **************************/
@@ -535,8 +533,8 @@ class SupSub extends MathCommand {
         };
       })(
         this,
-        'sub sup'.split(' ')[i] as 'sup' | 'sup',
-        'sup sub'.split(' ')[i] as 'sup' | 'sup',
+        'sub sup'.split(' ')[i] as 'sub' | 'sup',
+        'sup sub'.split(' ')[i] as 'sup' | 'sub',
         'down up'.split(' ')[i] as 'up' | 'down'
       );
   }
@@ -2200,7 +2198,7 @@ abstract class Tabular extends Environment {
     let blocks = this.blocks;
 
     const blockIndex = blocks.indexOf(deleteCell);
-    if (!blockIndex) return;
+    if (blockIndex === -1) return;
     const rowSize = this.rowSize;
     const deleteRow = deleteCell.row;
     const deleteColumn = blockIndex % rowSize;
