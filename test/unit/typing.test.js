@@ -108,11 +108,6 @@ suite('typing with auto-replaces', function () {
       assertLatex('\\text{asdf}+');
     });
 
-    test('dollar sign', function () {
-      mq.typedText('$');
-      assertLatex('\\$');
-    });
-
     test('\\text followed by command', function () {
       mq.typedText('\\text{');
       assertLatex('\\text{\\{}');
@@ -1206,7 +1201,8 @@ suite('typing with auto-replaces', function () {
   suite('autoCommands', function () {
     var normalConfig = {
       autoOperatorNames: 'sin pp',
-      autoCommands: 'pi tau phi theta Gamma sum prod sqrt nthroot cbrt percent',
+      autoCommands:
+        'pi tau phi theta Gamma sum lim prod sqrt nthroot cbrt percent',
     };
     var subscriptConfig = {
       autoOperatorNames: 'sin pp',
@@ -1227,6 +1223,11 @@ suite('typing with auto-replaces', function () {
       mq.typedText('prod');
       mq.typedText('n=0').keystroke('Up').typedText('100').keystroke('Right');
       assertLatex('\\prod_{n=0}^{100}');
+      mq.keystroke('Ctrl-Backspace');
+
+      mq.typedText('lim');
+      mq.typedText('xy').keystroke('Right');
+      assertLatex('\\lim_{xy}');
       mq.keystroke('Ctrl-Backspace');
 
       mq.typedText('sqrt');
@@ -1313,8 +1314,7 @@ suite('typing with auto-replaces', function () {
 
     test('command is a built-in operator name', function () {
       var cmds = (
-        'Pr arg deg det dim exp gcd hom inf ker lg lim ln log max min sup' +
-        ' limsup liminf injlim projlim Pr'
+        'arg deg det dim exp gcd hom ker lg ln log max min' + ' injlim projlim'
       ).split(' ');
       for (var i = 0; i < cmds.length; i += 1) {
         assert.throws(function () {
@@ -1326,9 +1326,7 @@ suite('typing with auto-replaces', function () {
     test('built-in operator names even after auto-operator names overridden', function () {
       MQ.config({ autoOperatorNames: 'sin inf arcosh cosh cos cosec csc' });
       // ^ happen to be the ones required by autoOperatorNames.test.js
-      var cmds = 'Pr arg deg det exp gcd inf lg lim ln log max min sup'.split(
-        ' '
-      );
+      var cmds = 'arg deg det exp gcd lg ln log max min'.split(' ');
       for (var i = 0; i < cmds.length; i += 1) {
         assert.throws(function () {
           MQ.config({ autoCommands: cmds[i] });

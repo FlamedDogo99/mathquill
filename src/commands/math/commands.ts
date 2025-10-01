@@ -426,10 +426,10 @@ class SupSub extends MathCommand {
       MathBlock.prototype.write.call(this, cursor, ch);
     };
   }
-  moveTowards(dir: Direction, cursor: Cursor, updown?: 'up' | 'down') {
+  moveTowards(dir: Direction, cursor: Cursor, verticalDir?: 'up' | 'down') {
     if (cursor.options.autoSubscriptNumerals && !this.sup) {
       cursor.insDirOf(dir, this);
-    } else super.moveTowards(dir, cursor, updown);
+    } else super.moveTowards(dir, cursor, verticalDir);
   }
   deleteTowards(dir: Direction, cursor: Cursor) {
     if (cursor.options.autoSubscriptNumerals && this.sub) {
@@ -533,8 +533,8 @@ class SupSub extends MathCommand {
         };
       })(
         this,
-        'sub sup'.split(' ')[i] as 'sup' | 'sup',
-        'sup sub'.split(' ')[i] as 'sup' | 'sup',
+        'sub sup'.split(' ')[i] as 'sub' | 'sup',
+        'sup sub'.split(' ')[i] as 'sup' | 'sub',
         'down up'.split(' ')[i] as 'up' | 'down'
       );
   }
@@ -739,35 +739,46 @@ LatexCmds['∏'] =
 LatexCmds.coprod = LatexCmds.coproduct = () =>
   new SummationNotation('\\coprod ', U_NARY_COPRODUCT, 'co product');
 
+class IntegralNotation extends SummationNotation {
+  constructor(ch: string, displayText: string, ariaLabel: string) {
+    super(ch, displayText, ariaLabel);
+
+    this.ariaLabel = ariaLabel;
+    this.domView = new DOMView(2, (blocks) =>
+      h('span', { class: 'mq-int mq-non-leaf' }, [
+        h('big', {}, [h.text(displayText)]),
+        h('span', { class: 'mq-supsub mq-non-leaf' }, [
+          h('span', { class: 'mq-sup' }, [
+            h.block('span', { class: 'mq-sup-inner' }, blocks[1]),
+          ]),
+          h.block('span', { class: 'mq-sub' }, blocks[0]),
+          h('span', { style: 'display:inline-block;width:0' }, [
+            h.text(U_ZERO_WIDTH_SPACE),
+          ]),
+        ]),
+      ])
+    );
+  }
+
+  createLeftOf(cursor: Cursor) {
+    // FIXME: refactor rather than overriding
+    MathCommand.prototype.createLeftOf.call(this, cursor);
+  }
+}
+
 LatexCmds['∫'] =
   LatexCmds['int'] =
   LatexCmds.integral =
-    class extends SummationNotation {
-      constructor() {
-        super('\\int ', '', 'integral');
+    () => new IntegralNotation('\\int', U_INTEGRAL, 'integral');
+LatexCmds['∬'] = LatexCmds['iint'] = () =>
+  new IntegralNotation('\\iint', '∬', 'double integral');
+LatexCmds['∭'] = LatexCmds['iiint'] = () =>
+  new IntegralNotation('\\iiint', '∭', 'triple integral');
+LatexCmds['⨌'] = LatexCmds['iiiint'] = () =>
+  new IntegralNotation('\\iiiint', '⨌', 'quadruple integral');
+LatexCmds['idotsint'] = () =>
+  new IntegralNotation('\\idotsint', '∫⋯∫', 'i dots integral');
 
-        this.ariaLabel = 'integral';
-        this.domView = new DOMView(2, (blocks) =>
-          h('span', { class: 'mq-int mq-non-leaf' }, [
-            h('big', {}, [h.text(U_INTEGRAL)]),
-            h('span', { class: 'mq-supsub mq-non-leaf' }, [
-              h('span', { class: 'mq-sup' }, [
-                h.block('span', { class: 'mq-sup-inner' }, blocks[1]),
-              ]),
-              h.block('span', { class: 'mq-sub' }, blocks[0]),
-              h('span', { style: 'display:inline-block;width:0' }, [
-                h.text(U_ZERO_WIDTH_SPACE),
-              ]),
-            ]),
-          ])
-        );
-      }
-
-      createLeftOf(cursor: Cursor) {
-        // FIXME: refactor rather than overriding
-        MathCommand.prototype.createLeftOf.call(this, cursor);
-      }
-    };
 var Fraction =
   (LatexCmds.frac =
   LatexCmds.dfrac =
@@ -1728,37 +1739,27 @@ class Environment extends MathCommand {
     ];
   }
 }
-
-class Matrix extends Environment {
-  delimiters = {
-    column: '&',
-    row: '\\\\',
-  };
-  parentheses = { left: '[', right: ']' };
-  blocks: MatrixCell[] = [];
-  rowSize: number = 0;
+abstract class Tabular extends Environment {
+  Cell: typeof TabularCell;
+  blocks: TabularCell[];
+  rowSize: number;
   mathspeakTemplate: string[];
-  ariaLabel = 'matrix';
-
-  constructor(
-    leftParentheses: string,
-    rightParentheses: string,
-    environment: string
-  ) {
+  abstract ariaLabel: string;
+  abstract delimiters: { column: string; row: string };
+  protected constructor(environment: string) {
     super();
-    this.parentheses = {
-      left: leftParentheses,
-      right: rightParentheses,
-    };
     this.environment = environment;
+    this.blocks = [];
+    this.rowSize = 0;
+    this.Cell = TabularCell;
   }
 
   latex() {
-    var self = this;
-    var latex = '';
+    let self = this;
+    let latex = '';
 
-    var row = -1;
-    var wrappers = this.wrappers();
+    let row = -1;
+    let wrappers = this.wrappers();
 
     latex += wrappers[0];
 
@@ -1776,95 +1777,49 @@ class Matrix extends Environment {
     });
 
     latex += wrappers[1];
+
     return latex;
   }
-  html() {
-    var cells: MatrixCell[] = [],
-      row: number = -1;
 
-    var leftch = this.parentheses.left as keyof typeof SVG_SYMBOLS;
-    var leftBracketSymbol = SVG_SYMBOLS[leftch] || { width: '0' };
-    var rightch = this.parentheses.right as keyof typeof SVG_SYMBOLS;
-    var rightBracketSymbol = SVG_SYMBOLS[rightch] || { width: '0' };
-    this.domView = new DOMView(cells.length, (blocks) => {
-      var rows: HTMLElement[] = [];
-      var tds: HTMLElement[] = [];
+  html() {
+    let row: number = -1;
+    let self = this;
+    this.domView = new DOMView(0, (blocks) => {
+      let rows: HTMLElement[] = [];
+      let tds: HTMLElement[] = [];
 
       blocks.forEach(function (cell) {
-        if (cell instanceof MatrixCell) {
+        if (cell instanceof TabularCell) {
           if (row !== cell.row && tds.length > 0) {
-            rows.push(h('tr', {}, tds));
+            rows.push(...self.createRow(tds));
             tds.length = 0;
           }
           row = cell.row;
-          tds.push(h.block('td', {}, cell));
+
+          tds.push(...self.createCell(cell));
         }
       });
       if (tds.length > 0) {
         rows.push(h('tr', {}, tds));
       }
-
-      var matrixhtml: HTMLElement[] = [];
-      if (leftBracketSymbol.width !== '0') {
-        matrixhtml.push(
-          h(
-            'span',
-            {
-              style: 'width:' + leftBracketSymbol.width,
-              class: 'mq-paren mq-bracket-l mq-scaled',
-            },
-            [leftBracketSymbol.html()]
-          )
-        );
-      }
-      matrixhtml.push(
-        h(
-          'table',
-          {
-            class: 'mq-non-left',
-            style:
-              'margin-left:' +
-              leftBracketSymbol.width +
-              '; margin-right:' +
-              rightBracketSymbol.width,
-          },
-          rows
-        )
-      );
-      if (rightBracketSymbol.width !== '0') {
-        matrixhtml.push(
-          h(
-            'span',
-            {
-              style: 'width:' + rightBracketSymbol.width,
-              class: 'mq-paren mq-bracket-r mq-scaled',
-            },
-            [rightBracketSymbol.html()]
-          )
-        );
-      }
-      return h(
-        'span',
-        { class: 'mq-matrix mq-non-leaf mq-bracket-container' },
-        matrixhtml
-      );
+      return self.createContainer(rows);
     });
 
     return super.html();
   }
   createBlocks() {
+    const Cell = this.Cell;
     this.blocks = [
-      new MatrixCell(0, this),
-      new MatrixCell(0, this),
-      new MatrixCell(1, this),
-      new MatrixCell(1, this),
+      new Cell(0, this),
+      new Cell(0, this),
+      new Cell(1, this),
+      new Cell(1, this),
     ];
   }
   parser() {
-    var self = this;
-    var optWhitespace = Parser.optWhitespace;
-    var string = Parser.string;
-
+    let self = this;
+    let optWhitespace = Parser.optWhitespace;
+    let string = Parser.string;
     return optWhitespace
       .then(
         string(self.delimiters.column)
@@ -1874,9 +1829,9 @@ class Matrix extends Environment {
       .many()
       .skip(optWhitespace)
       .then(function (items) {
-        var row = 0;
-        var blocks: MathBlock[] = [];
-        var cellcnt = 0;
+        let row = 0;
+        let blocks: MathBlock[] = [];
+        let cellIndex = 0;
 
         self.blocks.forEach(function (cell) {
           cell.remove();
@@ -1884,38 +1839,41 @@ class Matrix extends Environment {
 
         function addCell() {
           if (blocks.length > 0) {
-            self.blocks.push(new MatrixCell(row, self, blocks));
-            cellcnt++;
+            self.blocks.push(new self.Cell(row, self, blocks));
+            cellIndex++;
           }
           blocks = [];
         }
 
-        for (var i = 0; i < items.length; i += 1) {
-          let itemi = items[i];
-          if (itemi instanceof MathBlock) {
-            blocks.push(itemi);
+        for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+          let item = items[itemIndex];
+          if (item instanceof MathBlock) {
+            blocks.push(item);
           } else {
             addCell();
             if (
-              (itemi === self.delimiters.column &&
-                (i == 0 ||
-                  items[i - 1] === self.delimiters.column ||
-                  items[i - 1] === self.delimiters.row)) ||
-              (itemi === self.delimiters.row &&
-                i > 0 &&
-                items[i - 1] === self.delimiters.column)
+              (item === self.delimiters.column &&
+                (itemIndex == 0 ||
+                  items[itemIndex - 1] === self.delimiters.column ||
+                  items[itemIndex - 1] === self.delimiters.row)) ||
+              (item === self.delimiters.row &&
+                itemIndex > 0 &&
+                items[itemIndex - 1] === self.delimiters.column)
             ) {
               // two in a row; empty cell
-              self.blocks.push(new MatrixCell(row, self));
-              cellcnt++;
+              self.blocks.push(new self.Cell(row, self));
+              cellIndex++;
             }
-            if (itemi === self.delimiters.column && i === items.length - 1) {
-              self.blocks.push(new MatrixCell(row, self));
-              cellcnt++;
+            if (
+              item === self.delimiters.column &&
+              itemIndex === items.length - 1
+            ) {
+              self.blocks.push(new self.Cell(row, self));
+              cellIndex++;
             }
-            if (itemi === self.delimiters.row) {
+            if (item === self.delimiters.row) {
               if (row == 0) {
-                self.rowSize = cellcnt;
+                self.rowSize = cellIndex;
               }
               row += 1;
             }
@@ -1928,23 +1886,19 @@ class Matrix extends Environment {
       });
   }
   finalizeTree() {
-    /*  removed for now
-    var table = this.jQ.find('table');
-    table.toggleClass('mq-rows-1', table.find('tr').length === 1);
-    */
     this.relink();
     this.updateMathspeakTemplate();
   }
   // Enter the matrix at the top or bottom row if updown is configured.
-  getEntryPoint(dir: Direction, updown?: 'up' | 'down') {
-    if (updown === 'up') {
+  getEntryPoint(dir: Direction, verticalDir?: 'up' | 'down') {
+    if (verticalDir === 'up') {
       if (dir === L) {
         return this.blocks[this.rowSize - 1];
       } else {
         return this.blocks[0];
       }
     } else {
-      // updown === 'down'
+      // verticalDir === 'down'
       if (dir === L) {
         return this.blocks[this.blocks.length - 1];
       } else {
@@ -1955,32 +1909,30 @@ class Matrix extends Environment {
   // Exit the matrix at the first and last columns if updown is configured.
   atExitPoint(dir: Direction, cursor: Cursor) {
     // Which block are we in?
-    if (cursor.parent instanceof MatrixCell) {
-      var i = this.blocks.indexOf(cursor.parent);
+    if (cursor.parent instanceof TabularCell) {
+      let parentIndex = this.blocks.indexOf(cursor.parent);
       if (dir === L) {
         // If we're on the left edge and moving left, we should exit.
-        return i % this.rowSize === 0;
+        return parentIndex % this.rowSize === 0;
       } else {
         // If we're on the right edge and moving right, we should exit.
-        return (i + 1) % this.rowSize === 0;
+        return (parentIndex + 1) % this.rowSize === 0;
       }
     } else {
       return false;
     }
   }
-  moveTowards(dir: Direction, cursor: Cursor, updown?: 'up' | 'down') {
-    var entryPoint = updown && this.getEntryPoint(dir, updown);
+  moveTowards(dir: Direction, cursor: Cursor, verticalDir?: 'up' | 'down') {
+    let entryPoint = verticalDir && this.getEntryPoint(dir, verticalDir);
     cursor.insAtDirEnd(
       -dir as Direction,
       entryPoint || this.getEnd(-dir as Direction)
     );
   }
-
-  // Set up directional pointers between cells
   relink() {
-    var blocks = this.blocks;
-    var rows: MatrixCell[][] = [];
-    var row = -1,
+    let blocks = this.blocks;
+    let rows: TabularCell[][] = [];
+    let row = -1,
       column = 0,
       cell;
 
@@ -1991,8 +1943,8 @@ class Matrix extends Environment {
     // Use a for loop rather than eachChild
     // as we're still making sure children()
     // is set up properly
-    for (var i = 0; i < blocks.length; i += 1) {
-      cell = blocks[i];
+    for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+      cell = blocks[blockIndex];
       if (row !== cell.row) {
         if (cell.row === 1) {
           // We've just finished iterating the first row.
@@ -2005,61 +1957,24 @@ class Matrix extends Environment {
       rows[row][column] = cell;
 
       // Set up horizontal linkage
-      cell[R] = blocks[i + 1] ?? 0;
-      cell[L] = blocks[i - 1] ?? 0;
+      cell[R] = blocks[blockIndex + 1] ?? 0;
+      cell[L] = blocks[blockIndex - 1] ?? 0;
 
       // Set up vertical linkage
       if (rows[row - 1] && rows[row - 1][column]) {
         cell.upOutOf = rows[row - 1][column];
         rows[row - 1][column].downOutOf = cell;
       }
-
       column += 1;
     }
-
     // set start and end blocks of matrix
     this.setEnds({ [L]: blocks[0], [R]: blocks[blocks.length - 1] });
   }
-  updateMathspeakTemplate() {
-    var rowcnt = Math.floor(this.blocks.length / this.rowSize);
-    var colcnt = this.rowSize;
-
-    var newTemplate: string[] = [];
-
-    function toOrdinal(n: number) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    }
-
-    for (let i = 0; i < this.blocks.length; i++) {
-      const currow = Math.floor(i / this.rowSize) + 1;
-      const curcol = (i % this.rowSize) + 1;
-
-      var thistext = '';
-      if (curcol === 1) {
-        thistext += toOrdinal(currow) + ' Row ';
-      }
-      thistext += toOrdinal(curcol) + ' Column';
-
-      if (i == 0) {
-        newTemplate.push(
-          'Start ' + rowcnt + ' By ' + colcnt + ' Matrix ' + thistext
-        );
-      } else {
-        newTemplate.push(thistext);
-      }
-    }
-    newTemplate.push('EndMatrix');
-
-    this.mathspeakTemplate = newTemplate;
-  }
-  // Ensure consistent row lengths
   autocorrect() {
-    var lengths = [],
-      rows: MatrixCell[][] = [];
-    var blocks: MatrixCell[] = this.blocks;
-    var maxLength, shortfall, position, row, i;
+    let lengths = [],
+      rows: TabularCell[][] = [];
+    let blocks: TabularCell[] = this.blocks;
+    let maxLength, shortfall, position, row, i;
 
     for (i = 0; i < blocks.length; i += 1) {
       row = blocks[i].row;
@@ -2075,198 +1990,51 @@ class Matrix extends Environment {
         shortfall = maxLength - rows[i].length;
         while (shortfall) {
           position = maxLength * i + rows[i].length;
-          blocks.splice(position, 0, new MatrixCell(i, this));
+          blocks.splice(position, 0, new this.Cell(i, this));
           shortfall -= 1;
         }
       }
       this.relink();
     }
   }
-  deleteCell(currentCell: MatrixCell) {
-    var rows: MatrixCell[][] = [],
-      columns: MatrixCell[][] = [],
-      myRow: MatrixCell[] = [],
-      myColumn: MatrixCell[] = [];
-    var blocks = this.blocks,
-      row = -1,
-      column = 0;
-
-    // Create arrays for cells in the current row / column
-    blocks.forEach(function (cell) {
-      if (row !== cell.row) {
-        row = cell.row;
-        rows[row] = [];
-        column = 0;
-      }
-      columns[column] = columns[column] || [];
-      columns[column].push(cell);
-      rows[row].push(cell);
-
-      if (cell === currentCell) {
-        myRow = rows[row];
-        myColumn = columns[column];
-      }
-
-      column += 1;
-    });
-
-    function isEmpty(cells: MatrixCell[]) {
-      var empties = [];
-      for (var i = 0; i < cells.length; i += 1) {
-        if (cells[i].isEmpty()) empties.push(cells[i]);
-      }
-      return empties.length === cells.length;
-    }
-
-    function remove(cells: MatrixCell[]) {
-      for (var i = 0; i < cells.length; i += 1) {
-        if (blocks.indexOf(cells[i]) > -1) {
-          cells[i].remove();
-          blocks.splice(blocks.indexOf(cells[i]), 1);
-        }
-      }
-    }
-
-    if (isEmpty(myRow) && myColumn.length > 1) {
-      row = rows.indexOf(myRow);
-      // Decrease all following row numbers
-      blocks.forEach(function (cell) {
-        if (cell.row > row) cell.row -= 1;
-      });
-      // Dispose of cells and remove <tr>
-      remove(myRow);
-      /*  removed for now - not sure what we need to do
-        this.jQ.find('tr').eq(row).remove();
-      */
-      /* 
-        hacky fix, since tr's aren't tethered to anything
-      */
-      let tofix = this.domFrag().oneElement().querySelectorAll('tr');
-      tofix.forEach(function (el) {
-        if (!el.querySelector('td')) {
-          el.remove();
-        }
-      });
-    }
-    if (isEmpty(myColumn) && myRow.length > 1) {
-      remove(myColumn);
-    }
-    this.finalizeTree();
-  }
-  deleteColumn(basecellindex: number, cursor: Cursor) {
-    var rowSize = this.rowSize;
-    var colnum = basecellindex % rowSize;
-    var rownum = Math.floor(basecellindex / rowSize);
-
-    if (rowSize == 1) {
-      cursor.insRightOf(this);
-      this.remove();
-      return;
-    }
-
-    let curcol = colnum;
-    while (curcol < this.blocks.length) {
-      this.blocks[curcol].remove();
-      this.blocks.splice(curcol, 1);
-      curcol += rowSize - 1;
-    }
-
-    this.rowSize--;
-
-    if (colnum < this.rowSize) {
-      cursor.insAtRightEnd(this.blocks[rownum * this.rowSize + colnum]);
-    } else {
-      cursor.insAtRightEnd(this.blocks[rownum * this.rowSize + colnum - 1]);
-    }
-
-    this.finalizeTree();
-  }
-  deleteRow(basecellindex: number, cursor: Cursor) {
-    var rowSize = this.rowSize;
-    var rownum = Math.floor(basecellindex / rowSize);
-    var index = rownum * rowSize;
-
-    if (this.blocks.length == rowSize) {
-      cursor.insRightOf(this);
-      this.remove();
-      return;
-    }
-
-    for (let i = 0; i < rowSize; i++) {
-      this.blocks[index + i].remove();
-    }
-    this.blocks.splice(index, rowSize);
-
-    //hacky tr cleanup
-    let tofix = this.domFrag().oneElement().querySelectorAll('tr');
-    tofix.forEach(function (el) {
-      if (!el.querySelector('td')) {
-        el.remove();
-      }
-    });
-
-    for (let i = index; i < this.blocks.length; i++) {
-      this.blocks[i].row--;
-    }
-
-    if (basecellindex < this.blocks.length) {
-      cursor.insAtRightEnd(this.blocks[basecellindex]);
-    } else {
-      cursor.insAtRightEnd(this.blocks[basecellindex - rowSize]);
-    }
-
-    this.finalizeTree();
-  }
-  addColumn(basecellindex: number, dir?: any) {
-    var rowSize = this.rowSize;
-    var colnum = basecellindex % rowSize;
-    var row = 0;
-    var self = this;
+  addColumn(blockIndex: number, dir?: any) {
+    let rowSize = this.rowSize;
+    let columnIndex = blockIndex % rowSize;
+    let rowIndex = 0;
+    let self = this;
     if (dir !== 1 && dir !== -1) {
       dir = 1;
     }
 
-    while (colnum < this.blocks.length) {
-      let newcell = new MatrixCell(row, self);
-      newcell.setDOM(
-        domFrag(h('td', { class: 'mq-empty' }, []))
-          .insDirOf(dir as Direction, this.blocks[colnum].domFrag())
-          .oneElement()
-      );
-      NodeBase.linkElementByBlockNode(newcell.domFrag().oneElement(), newcell);
-      this.blocks.splice(colnum + (dir === 1 ? 1 : 0), 0, newcell);
-      colnum += rowSize + 1;
-      row++;
+    while (columnIndex < this.blocks.length) {
+      let cell = new this.Cell(rowIndex, self);
+      this.insertCell(cell, dir, columnIndex);
+      NodeBase.linkElementByBlockNode(cell.domFrag().oneElement(), cell);
+      this.blocks.splice(columnIndex + (dir === 1 ? 1 : 0), 0, cell);
+      columnIndex += rowSize + 1;
+      rowIndex++;
     }
 
     this.rowSize++;
     this.finalizeTree();
   }
-  addRow(basecellindex: number, dir?: any) {
-    var rowSize = this.rowSize;
-    var self = this;
+  addRow(blockIndex: number, dir?: any) {
+    let rowSize = this.rowSize;
+    let self = this;
     if (dir !== 1 && dir !== -1) {
       dir = 1;
     }
-    var rownum = Math.floor(basecellindex / rowSize) + (dir === 1 ? 1 : 0);
-    var index = rownum * rowSize;
+    let rowIndex = Math.floor(blockIndex / rowSize) + (dir === 1 ? 1 : 0);
+    let index = rowIndex * rowSize;
 
-    let newtr = domFrag(h('tr', {}, []));
-    if (dir === 1) {
-      newtr.insertAfter(this.blocks[index - 1].domFrag().parent());
-    } else {
-      newtr.insertBefore(this.blocks[index].domFrag().parent());
-    }
+    let tr = domFrag(h('tr', {}, []));
+    this.insertRow(tr, index, dir);
 
-    for (let i = 0; i < rowSize; i++) {
-      let newcell = new MatrixCell(rownum, self);
-      newcell.setDOM(
-        domFrag(h('td', { class: 'mq-empty' }, []))
-          .appendTo(newtr.oneElement())
-          .oneElement()
-      );
-      NodeBase.linkElementByBlockNode(newcell.domFrag().oneElement(), newcell);
-      this.blocks.splice(index, 0, newcell);
+    for (let columnIndex = 0; columnIndex < rowSize; columnIndex++) {
+      let cell = new this.Cell(rowIndex, self);
+      this.insertRowCell(cell, tr, columnIndex);
+      NodeBase.linkElementByBlockNode(cell.domFrag().oneElement(), cell);
+      this.blocks.splice(index, 0, cell);
       index++;
     }
     for (let i = index; i < this.blocks.length; i++) {
@@ -2275,24 +2043,71 @@ class Matrix extends Environment {
 
     this.finalizeTree();
   }
+  updateMathspeakTemplate() {
+    let rowCount = Math.floor(this.blocks.length / this.rowSize);
+    let columnCount = this.rowSize;
+    const env =
+      String(this.environment).charAt(0).toUpperCase() +
+      String(this.environment).slice(1);
+
+    let newTemplate: string[] = [];
+
+    function toOrdinal(number: number) {
+      const ordinalSuffix = ['th', 'st', 'nd', 'rd'];
+      const v = number % 100;
+      return (
+        number +
+        (ordinalSuffix[(v - 20) % 10] || ordinalSuffix[v] || ordinalSuffix[0])
+      );
+    }
+
+    for (let blockIndex = 0; blockIndex < this.blocks.length; blockIndex++) {
+      const currentRow = Math.floor(blockIndex / this.rowSize) + 1;
+      const currentColumn = (blockIndex % this.rowSize) + 1;
+
+      let speakText = '';
+      if (currentColumn === 1) {
+        speakText += toOrdinal(currentRow) + ' Row ';
+      }
+      speakText += toOrdinal(currentColumn) + ' Column';
+
+      if (blockIndex == 0) {
+        newTemplate.push(
+          'Start ' +
+            rowCount +
+            ' By ' +
+            columnCount +
+            ' ' +
+            env +
+            ' ' +
+            speakText
+        );
+      } else {
+        newTemplate.push(speakText);
+      }
+    }
+    newTemplate.push('End' + env);
+
+    this.mathspeakTemplate = newTemplate;
+  }
   backspace(
-    cell: MatrixCell,
+    cell: TabularCell,
     dir: Direction,
     cursor: Cursor,
     finalDeleteCallback: Function
   ) {
-    var dirwards = cell[dir];
+    var dirCell = cell[dir];
     if (cell.isEmpty()) {
-      this.deleteCell(cell);
+      this.deleteCell(cell, cursor);
       while (
-        dirwards &&
-        dirwards[dir] &&
-        this.blocks.indexOf(dirwards as MatrixCell) === -1
+        dirCell &&
+        dirCell[dir] &&
+        this.blocks.indexOf(dirCell as TabularCell) === -1
       ) {
-        dirwards = dirwards[dir];
+        dirCell = dirCell[dir];
       }
-      if (dirwards) {
-        cursor.insAtDirEnd(-dir as Direction, dirwards);
+      if (dirCell) {
+        cursor.insAtDirEnd(-dir as Direction, dirCell);
       }
       if (this.blocks.length === 1 && this.blocks[0].isEmpty()) {
         finalDeleteCallback();
@@ -2311,6 +2126,533 @@ class Matrix extends Environment {
     this.domFrag().remove();
     return this.disown();
   }
+
+  deleteRow(cellIndex: number, cursor: Cursor) {
+    let rowSize = this.rowSize;
+    let rowIndex = Math.floor(cellIndex / rowSize);
+    let currentIndex = rowIndex * rowSize;
+
+    if (this.blocks.length == rowSize) {
+      cursor.insRightOf(this);
+      this.remove();
+      return;
+    }
+
+    for (let i = 0; i < rowSize; i++) {
+      this.blocks[currentIndex + i].remove();
+    }
+    this.blocks.splice(currentIndex, rowSize);
+
+    //hacky tr cleanup
+    let tofix = this.domFrag().oneElement().querySelectorAll('tr');
+    tofix.forEach(function (el) {
+      if (!el.querySelector('td')) {
+        el.remove();
+      }
+    });
+
+    for (let i = currentIndex; i < this.blocks.length; i++) {
+      this.blocks[i].row--;
+    }
+
+    if (cellIndex < this.blocks.length) {
+      cursor.insAtRightEnd(this.blocks[cellIndex]);
+    } else {
+      cursor.insAtRightEnd(this.blocks[cellIndex - rowSize]);
+    }
+
+    this.finalizeTree();
+  }
+
+  deleteColumn(cellIndex: number, cursor: Cursor) {
+    let rowSize = this.rowSize;
+    let columnIndex = cellIndex % rowSize;
+    let rowIndex = Math.floor(cellIndex / rowSize);
+
+    if (rowSize == 1) {
+      cursor.insRightOf(this);
+      this.remove();
+      return;
+    }
+
+    let currentColumn = columnIndex;
+    while (currentColumn < this.blocks.length) {
+      this.blocks[currentColumn].remove();
+      this.blocks.splice(currentColumn, 1);
+      currentColumn += rowSize - 1;
+    }
+
+    this.rowSize--;
+
+    if (columnIndex < this.rowSize) {
+      cursor.insAtRightEnd(this.blocks[rowIndex * this.rowSize + columnIndex]);
+    } else {
+      cursor.insAtRightEnd(
+        this.blocks[rowIndex * this.rowSize + columnIndex - 1]
+      );
+    }
+    this.finalizeTree();
+  }
+
+  deleteCell(deleteCell: TabularCell, cursor: Cursor) {
+    let blocks = this.blocks;
+
+    const blockIndex = blocks.indexOf(deleteCell);
+    if (blockIndex === -1) return;
+    const rowSize = this.rowSize;
+    const deleteRow = deleteCell.row;
+    const deleteColumn = blockIndex % rowSize;
+    let rowCount = 0;
+    let columnCount = 0;
+
+    function columnEmpty() {
+      for (
+        let cellIndex = deleteColumn;
+        cellIndex < blocks.length;
+        cellIndex += rowSize
+      ) {
+        columnCount++;
+        const currentCell = blocks[cellIndex];
+        if (!currentCell.isEmpty()) return false;
+      }
+      return true;
+    }
+    function rowEmpty() {
+      const startIndex = deleteRow * rowSize;
+      for (
+        let cellIndex = startIndex;
+        cellIndex < startIndex + rowSize;
+        cellIndex += 1
+      ) {
+        rowCount++;
+        const currentCell = blocks[cellIndex];
+        if (!currentCell.isEmpty()) return false;
+      }
+      return true;
+    }
+    const isRowEmpty = rowEmpty();
+    const isColumnEmpty = columnEmpty();
+    if (isRowEmpty && rowCount > 0) {
+      this.deleteRow(blockIndex, cursor);
+    }
+    if (isColumnEmpty && columnCount > 0) {
+      this.deleteColumn(blockIndex, cursor);
+    }
+    this.finalizeTree();
+  }
+  abstract createCell(cell: MathBlock): HTMLElement[];
+  abstract createRow(cells: HTMLElement[]): HTMLElement[];
+  abstract createContainer(rows: HTMLElement[]): HTMLElement;
+  abstract insertCell(
+    cell: TabularCell,
+    dir: Direction,
+    columnIndex: number
+  ): void;
+  abstract insertRow(tr: DOMFragment, index: number, dir?: any): void;
+  abstract insertRowCell(
+    cell: TabularCell,
+    tr: DOMFragment,
+    columnIndex: number
+  ): void;
+}
+
+class TabularCell extends MathBlock {
+  row;
+
+  constructor(row: number, parent: Tabular, replaces?: MathBlock[]) {
+    super();
+    this.row = row;
+    if (parent instanceof Tabular) {
+      this.adopt(parent, parent.getEnd(R), 0);
+    }
+    if (replaces) {
+      for (const replace of replaces) {
+        replace.children().adopt(this, this.ends[R], 0);
+      }
+    }
+  }
+  deleteOutOf(dir: Direction, cursor: Cursor) {
+    if (this.parent instanceof Tabular) {
+      this.parent.backspace(this, dir, cursor, () => {
+        return super.deleteOutOf(dir, cursor);
+      });
+    }
+  }
+  moveOutOf(dir: Direction, cursor: Cursor, verticalDir?: 'up' | 'down') {
+    let atExitPoint =
+      verticalDir &&
+      this.parent instanceof Tabular &&
+      this.parent.atExitPoint(dir, cursor);
+    // Step out of the matrix if we've moved past an edge column
+    if (!atExitPoint && this[dir] instanceof MQNode)
+      cursor.insAtDirEnd(-dir as Direction, this[dir] as MQNode);
+    else cursor.insDirOf(dir, this.parent);
+  }
+}
+
+class Matrix extends Tabular {
+  delimiters = {
+    column: '&',
+    row: '\\\\',
+  };
+  parentheses = { left: '[', right: ']' };
+  leftBracketSymbol: { width: string; html: () => SVGElement };
+  rightBracketSymbol: { width: string; html: () => SVGElement };
+
+  ariaLabel = 'matrix';
+
+  constructor(
+    leftParentheses: string,
+    rightParentheses: string,
+    environment: string
+  ) {
+    super(environment);
+    this.parentheses = {
+      left: leftParentheses,
+      right: rightParentheses,
+    };
+    this.environment = environment;
+
+    let leftChar = this.parentheses.left as keyof typeof SVG_SYMBOLS;
+    this.leftBracketSymbol = SVG_SYMBOLS[leftChar] || { width: '0' };
+    let rightChar = this.parentheses.right as keyof typeof SVG_SYMBOLS;
+    this.rightBracketSymbol = SVG_SYMBOLS[rightChar] || { width: '0' };
+  }
+
+  createRow(cells: HTMLElement[]): HTMLElement[] {
+    return [h('tr', {}, cells)];
+  }
+  createCell(cell: MathBlock): HTMLElement[] {
+    return [h.block('td', {}, cell)];
+  }
+  createContainer(rows: HTMLElement[]): HTMLElement {
+    let matrixHTML: HTMLElement[] = [];
+    if (this.leftBracketSymbol.width !== '0') {
+      matrixHTML.push(
+        h(
+          'span',
+          {
+            style: 'width:' + this.leftBracketSymbol.width,
+            class: 'mq-paren mq-bracket-l mq-scaled',
+          },
+          [this.leftBracketSymbol.html()]
+        )
+      );
+    }
+    matrixHTML.push(
+      h(
+        'table',
+        {
+          class: 'mq-non-left',
+          style:
+            'margin-left:' +
+            this.leftBracketSymbol.width +
+            '; margin-right:' +
+            this.rightBracketSymbol.width,
+        },
+        rows
+      )
+    );
+    if (this.rightBracketSymbol.width !== '0') {
+      matrixHTML.push(
+        h(
+          'span',
+          {
+            style: 'width:' + this.rightBracketSymbol.width,
+            class: 'mq-paren mq-bracket-r mq-scaled',
+          },
+          [this.rightBracketSymbol.html()]
+        )
+      );
+    }
+    return h(
+      'span',
+      { class: 'mq-matrix mq-non-leaf mq-bracket-container' },
+      matrixHTML
+    );
+  }
+
+  insertRowCell(cell: TabularCell, tr: DOMFragment, _columnIndex: number) {
+    cell.setDOM(
+      domFrag(h('td', { class: 'mq-empty' }, []))
+        .appendTo(tr.oneElement())
+        .oneElement()
+    );
+  }
+  insertRow(tr: DOMFragment, index: number, dir?: any) {
+    if (dir === 1) {
+      tr.insertAfter(this.blocks[index - 1].domFrag().parent());
+    } else {
+      tr.insertBefore(this.blocks[index].domFrag().parent());
+    }
+  }
+  insertCell(cell: TabularCell, dir: Direction, columnIndex: number) {
+    cell.setDOM(
+      domFrag(h('td', { class: 'mq-empty' }, []))
+        .insDirOf(dir as Direction, this.blocks[columnIndex].domFrag())
+        .oneElement()
+    );
+  }
+}
+class ArrayCell extends TabularCell {
+  constructor(row: number, parent: Matrix, replaces?: MathBlock[]) {
+    super(row, parent, replaces);
+  }
+  remove() {
+    const parent = this.domFrag().parent();
+    const disown = super.remove();
+    parent.remove();
+    return disown;
+  }
+}
+
+class LatexArray extends Tabular {
+  ariaLabel: string = 'array';
+  delimiters = {
+    column: '&',
+    row: '\\\\',
+  };
+  columnSpecs: { justify: any; left: string; right: string }[];
+  columnSpecString: string;
+
+  columnIndex: number;
+
+  constructor() {
+    super('array');
+    this.columnSpecParser('cc');
+    this.Cell = ArrayCell;
+  }
+  wrappers() {
+    return [
+      this.template[0].join(this.environment) +
+        '{' +
+        this.columnSpecString +
+        '}',
+      this.template[1].join(this.environment),
+    ];
+  }
+
+  parser() {
+    const self = this;
+    const parentParser = super.parser;
+    let string = Parser.string;
+    const regex = Parser.regex;
+    return string('{')
+      .then(regex(/^[clr|]+/i))
+      .skip(string('}'))
+      .then(function (columnSpec) {
+        return parentParser.call(self).then(function () {
+          return self.columnSpecParser(columnSpec);
+        });
+      });
+  }
+  columnSpecParser(columnSpecString: string) {
+    let processedSpecs = [];
+    let leftBars: string = '';
+    let rightBars: string = '';
+    for (const char of columnSpecString) {
+      if (char === '|') {
+        if (processedSpecs.length === 0) {
+          leftBars += char;
+        } else {
+          rightBars += char;
+        }
+        continue;
+      }
+      if (rightBars) {
+        processedSpecs[processedSpecs.length - 1].right = rightBars;
+        rightBars = '';
+      }
+      const column = {
+        justify: char,
+        left: '',
+        right: '',
+      };
+      processedSpecs.push(column);
+      if (leftBars) {
+        processedSpecs[processedSpecs.length - 1].left = leftBars;
+        leftBars = '';
+      }
+    }
+    if (rightBars) {
+      processedSpecs[processedSpecs.length - 1].right = rightBars;
+    }
+    this.columnSpecs = processedSpecs;
+    this.columnSpecString = columnSpecString;
+    if (processedSpecs.length !== this.rowSize || processedSpecs.length === 0) {
+      return Parser.fail('columnSpecs does not match rowSize');
+    } else {
+      return Parser.succeed(this);
+    }
+  }
+  columnSpecUnparser(
+    columnSpecs: { justify: any; left: string; right: string }[]
+  ) {
+    let columnSpecString = '';
+    for (const column of columnSpecs) {
+      if (column.left) columnSpecString += column.left;
+      columnSpecString += column.justify;
+      if (column.right) columnSpecString += column.right;
+    }
+    return columnSpecString;
+  }
+
+  html() {
+    this.columnIndex = 0;
+    return super.html();
+  }
+  createRow(cells: HTMLElement[]): HTMLElement[] {
+    this.columnIndex = 0;
+    return [h('tr', {}, cells)];
+  }
+  createCell(cell: MathBlock): HTMLElement[] {
+    let cells: HTMLElement[] = [];
+    const columnSpec = this.columnSpecs[this.columnIndex];
+    for (const _ of columnSpec.left) {
+      cells.push(h('td', { class: 'mq-vertical-separator' }));
+    }
+    cells.push(
+      h(
+        'td',
+        {
+          class:
+            'mq-array-block-padding' +
+            ' ' +
+            'mq-array-justify-' +
+            this.columnSpecs[this.columnIndex].justify,
+        },
+        [h.block('span', {}, cell)]
+      )
+    );
+    for (const _ of columnSpec.right) {
+      cells.push(h('td', { class: 'mq-vertical-separator' }));
+    }
+    this.columnIndex++;
+    return cells;
+  }
+  createContainer(rows: HTMLElement[]): HTMLElement {
+    return h(
+      'span',
+      {
+        class: 'mq-matrix mq-array mq-non-leaf',
+      },
+      [
+        h(
+          'table',
+          {
+            class: 'mq-non-left',
+          },
+          rows
+        ),
+      ]
+    );
+  }
+  addColumn(blockIndex: number, dir?: any) {
+    let rowSize = this.rowSize;
+    let columnIndex = blockIndex % rowSize;
+
+    if (dir !== 1 && dir !== -1) {
+      dir = 1;
+    }
+
+    const spliceColumn = this.columnSpecs[columnIndex];
+    const defaultColumnSpec = { justify: 'c', left: '', right: '' };
+    if (dir === 1) {
+      defaultColumnSpec.right = spliceColumn.right;
+      spliceColumn.right = '';
+    } else {
+      defaultColumnSpec.left = spliceColumn.left;
+      spliceColumn.left = '';
+    }
+
+    this.columnSpecs.splice(
+      columnIndex + (dir === 1 ? 1 : 0),
+      0,
+      defaultColumnSpec
+    );
+    this.columnSpecString = this.columnSpecUnparser(this.columnSpecs);
+
+    super.addColumn(blockIndex, dir);
+  }
+  insertCell(cell: TabularCell, dir: Direction, columnIndex: number) {
+    cell.setDOM(h('span', { class: 'mq-empty' }, []));
+    domFrag(
+      h(
+        'td',
+        {
+          class: 'mq-array-block-padding mq-array-justify-c',
+        },
+        [cell.domFrag().oneElement()]
+      )
+    )
+      .insDirOf(dir as Direction, this.blocks[columnIndex].domFrag().parent())
+      .oneElement();
+  }
+
+  insertRowCell(cell: TabularCell, tr: DOMFragment, columnIndex: number) {
+    const columnSpec = this.columnSpecs[columnIndex];
+    for (const _ of columnSpec.left) {
+      domFrag(h('td', { class: 'mq-vertical-separator' })).appendTo(
+        tr.oneElement()
+      );
+    }
+    cell.setDOM(h('span', { class: 'mq-empty' }, []));
+    domFrag(
+      h(
+        'td',
+        {
+          class:
+            'mq-array-block-padding' +
+            ' ' +
+            'mq-array-justify-' +
+            this.columnSpecs[columnIndex].justify,
+        },
+        [cell.domFrag().oneElement()]
+      )
+    )
+      .appendTo(tr.oneElement())
+      .oneElement();
+    for (const _ of columnSpec.right) {
+      domFrag(h('td', { class: 'mq-vertical-separator' })).appendTo(
+        tr.oneElement()
+      );
+    }
+  }
+  insertRow(tr: DOMFragment, index: number, dir?: any) {
+    if (dir === 1) {
+      tr.insertAfter(this.blocks[index - 1].domFrag().parent().parent());
+    } else {
+      tr.insertBefore(this.blocks[index].domFrag().parent().parent());
+    }
+  }
+  deleteColumn(cellIndex: number, cursor: Cursor): void {
+    const columnSpecs = this.columnSpecs;
+    const rowSize = this.rowSize;
+    const columnIndex = cellIndex % rowSize;
+    const removedSpec = columnSpecs[columnIndex];
+    if (columnIndex > 0) {
+      columnSpecs[columnIndex - 1].right += removedSpec.right;
+    } else if (columnIndex < rowSize) {
+      columnSpecs[1].left += removedSpec.right;
+    }
+    columnSpecs.splice(columnIndex, 1);
+    this.columnSpecString = this.columnSpecUnparser(columnSpecs);
+    super.deleteColumn(cellIndex, cursor);
+  }
+  deleteRow(cellIndex: number, cursor: Cursor) {
+    debugger;
+    const tr = this.blocks[cellIndex].domFrag().oneElement()
+      .parentElement?.parentElement;
+    if (tr instanceof HTMLElement) {
+      const verticalSeparators = Array.prototype.slice.call(
+        tr.getElementsByClassName('mq-vertical-separator')
+      );
+      for (const separator of verticalSeparators) {
+        separator.remove();
+      }
+    }
+    super.deleteRow(cellIndex, cursor);
+  }
 }
 
 EnvironmentCmds.matrix = () => new Matrix('', '', 'matrix');
@@ -2319,37 +2661,90 @@ EnvironmentCmds.bmatrix = () => new Matrix('[', ']', 'bmatrix');
 EnvironmentCmds.Bmatrix = () => new Matrix('{', '}', 'Bmatrix');
 EnvironmentCmds.vmatrix = () => new Matrix('|', '|', 'vmatrix');
 EnvironmentCmds.Vmatrix = () => new Matrix('&#8741;', '&#8741;', 'Vmatrix');
+EnvironmentCmds.cases = () => new Matrix('{', '', 'cases');
+EnvironmentCmds.array = () => new LatexArray();
 
-class MatrixCell extends MathBlock {
-  row;
-
-  constructor(row: number, parent: Matrix, replaces?: MathBlock[]) {
+class LimitNotation extends MathCommand {
+  constructor(ch: string, displayText: string, ariaLabel?: string) {
     super();
-    this.row = row;
-    if (parent instanceof Matrix) {
-      this.adopt(parent, parent.getEnd(R), 0);
-    }
-    if (replaces) {
-      for (var i = 0; i < replaces.length; i++) {
-        replaces[i].children().adopt(this, this.ends[R], 0);
-      }
-    }
+    this.ariaLabel = ariaLabel || ch.replace(/^\\/, '');
+    var domView = new DOMView(1, (blocks) =>
+      h('span', { class: 'mq-limit mq-non-leaf' }, [
+        h('span', { class: 'mq-lim' }, [h.text(displayText)]),
+        h('span', { class: 'mq-approaches' }, [h.block('span', {}, blocks[0])]),
+      ])
+    );
+
+    MQSymbol.prototype.setCtrlSeqHtmlTextAndMathspeak.call(this, ch, domView);
   }
-  deleteOutOf(dir: Direction, cursor: Cursor) {
-    if (this.parent instanceof Matrix) {
-      this.parent.backspace(this, dir, cursor, () => {
-        return super.deleteOutOf(dir, cursor);
-      });
+
+  latex() {
+    function simplify(latex: string) {
+      return latex.length === 1 ? latex : '{' + (latex || ' ') + '}';
     }
+    return this.ctrlSeq + '_' + simplify(this.getEnd(L).latex());
   }
-  moveOutOf(dir: Direction, cursor: Cursor, updown?: 'up' | 'down') {
-    var atExitPoint =
-      updown &&
-      this.parent instanceof Matrix &&
-      this.parent.atExitPoint(dir, cursor);
-    // Step out of the matrix if we've moved past an edge column
-    if (!atExitPoint && this[dir] instanceof MQNode)
-      cursor.insAtDirEnd(-dir as Direction, this[dir] as MQNode);
-    else cursor.insDirOf(dir, this.parent);
+  parser() {
+    var string = Parser.string;
+    var optWhitespace = Parser.optWhitespace;
+    var succeed = Parser.succeed;
+    var block = latexMathParser.block;
+
+    var self = this,
+      child = new MathBlock();
+    self.blocks = [child];
+    child.adopt(self, 0, 0);
+
+    return optWhitespace
+      .then(string('_'))
+      .then(function () {
+        return block.then(function (block) {
+          block.children().adopt(child, child.getEnd(R), 0);
+          return succeed(self);
+        });
+      })
+      .many()
+      .result(self);
+  }
+  mathspeak() {
+    return (
+      'Start ' +
+      this.ariaLabel +
+      ' as ' +
+      this.getEnd(L).mathspeak() +
+      ', end ' +
+      this.ariaLabel +
+      ', '
+    );
+  }
+  finalizeTree() {
+    var endsL = this.getEnd(L);
+
+    endsL.ariaLabel = 'as';
+
+    this.downInto = this.getEnd(L);
+    this.getEnd(L).upOutOf = function (cursor) {
+      // this is basically gonna be insRightOfMeUnlessAtEnd,
+      // by analogy with insLeftOfMeUnlessAtEnd
+      var cmd = this.parent,
+        ancestorCmd: Cursor | MQNode = cursor;
+      do {
+        if (ancestorCmd[L]) return cursor.insRightOf(cmd);
+        ancestorCmd = ancestorCmd.parent.parent;
+      } while (ancestorCmd !== cmd);
+      return cursor.insLeftOf(cmd);
+    };
   }
 }
+LatexCmds.lim = LatexCmds.limit = () =>
+  new LimitNotation('\\lim', 'lim', 'limit');
+LatexCmds.inf = LatexCmds.infimum = () =>
+  new LimitNotation('\\inf', 'inf', 'infimum');
+LatexCmds.sup = LatexCmds.supremum = () =>
+  new LimitNotation('\\sup', 'sup', 'supremum');
+LatexCmds.Pr = LatexCmds.probability = () =>
+  new LimitNotation('\\Pr', 'Pr', 'probability');
+LatexCmds.liminf = () =>
+  new LimitNotation('\\liminf', 'lim inf', 'limit infimum');
+LatexCmds.limsup = () =>
+  new LimitNotation('\\limsup', 'lim sup', 'limit supremum');

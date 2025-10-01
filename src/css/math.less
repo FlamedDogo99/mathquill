@@ -169,6 +169,43 @@
     }
   }
 
+  .mq-int {
+    > big {
+      display: inline-block;
+      .transform(scaleX(.7));
+      vertical-align: -.16em;
+    }
+
+    > .mq-supsub {
+      font-size: 80%;
+      vertical-align: -1.1em;
+      padding-right: .2em;
+
+      > .mq-sup > .mq-sup-inner {
+        vertical-align: 1.3em;
+      }
+
+      > .mq-sub {
+        margin-left: -.35em;
+      }
+    }
+  }
+
+
+  .mq-limit {
+    text-align: center;
+
+    .mq-lim {
+      display: block;
+    }
+    .mq-approaches {
+      font-size: 80%;
+      float: right; /* take out of normal flow to manipulate baseline */
+      width: 100%;
+      display: block;
+    }
+  }
+
   .mq-roman {
     font-style: normal;
   }
@@ -490,3 +527,35 @@
     }
     */
   }
+.mq-array > table {
+  border-collapse: collapse;
+}
+.mq-array > table tr > td.mq-vertical-separator {
+  background-image: linear-gradient(#000, #000);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: center center;
+  padding-left: 1.5px;
+  padding-right: 1.5px;
+}
+
+.mq-array > table tr > td.mq-array-block-padding {
+  padding: 0;
+}
+td.mq-array-block-padding > span {
+  padding: 0.1em 0.3em;
+  display: block;
+  margin: 1.5px;
+}
+
+.mq-array > table tr > td.mq-array-justify-r {
+  text-align: right;
+}
+.mq-array > table tr > td.mq-array-justify-l {
+  text-align: left;
+}
+.mq-array > table tr > td.mq-array-justify-c {
+  text-align: center;
+}
+
+

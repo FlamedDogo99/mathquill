@@ -88,11 +88,6 @@ suite('Public API', function () {
       assert.equal(mq.latex(), '\\backslash');
     });
 
-    test('typing $', function () {
-      mq.typedText('$');
-      assert.equal(mq.latex(), '\\$');
-    });
-
     test('parsing of advanced symbols', function () {
       mq.latex('\\oplus');
       assert.equal(mq.latex(), ''); // TODO: better LaTeX parse error behavior

@@ -588,7 +588,7 @@ function defaultAutoOpNames() {
     _maxLength: 9,
   };
   var mostOps = (
-    'arg deg det dim exp gcd hom inf ker lg lim ln log max min mod sup' +
+    'arg deg det dim exp gcd hom inf ker lg ln log max min mod sup' +
     ' limsup liminf injlim projlim Pr'
   ).split(' ');
   for (var i = 0; i < mostOps.length; i += 1) {
@@ -763,6 +763,7 @@ LatexCmds['∤'] =
   LatexCmds.nmid =
   LatexCmds.notmid =
     bindVanillaSymbol('\\nmid ', '&#8740;', 'does not divide');
+LatexCmds.colon = bindVanillaSymbol('\\colon ', '&#58;', 'colon');
 
 // does not use Symbola font
 class NonSymbolaSymbol extends MQSymbol {
@@ -1380,3 +1381,155 @@ class Approx extends BinaryOperator {
 
 CharCmds['~'] = LatexCmds.sim = Sim;
 LatexCmds['≈'] = LatexCmds.approx = Approx;
+
+const NON_SYMBOLA_SYMBOL = [
+  // Basic LaTeX
+  'ldots:2026',
+  'cdots:22EF',
+  'vdots:22ee',
+  'ddots:22f1',
+
+  // amsmath (recommended)
+  'dotsb:22ef',
+  'dotsc:2026',
+  'dotsi:22ef',
+  'dotsm:2026',
+  'dotso:2026',
+  'dots:2026', // TODO: dots is supposed to take into account the
+  // surrounding elements and render appropriately (i.e. baseline, midline, etc...)
+
+  // Punctuation
+  'ldotp:002e',
+  'cdotp:22c5',
+  'ddots:22f1',
+  'vdots:22ee',
+
+  // AMS Hebrew
+  'aleph:2135',
+  'beth:2136',
+  'daleth:2138',
+  'gimel:2137',
+
+  // Greek constants look better upright
+  'pi:03c0',
+  'lambda:03bb',
+];
+
+const BASIC_VANILLA_SYMBOLS = [
+  'Gamma:0393',
+  'Delta:0394',
+  'Theta:0398',
+  'Lambda:039b',
+  'Xi:039e',
+  'Pi:03a0',
+  'Sigma:03a3',
+  'Upsilon:03a5',
+  'Phi:03a6',
+  'Psi:03a8',
+  'Omega:03a9',
+  'Upsi/Upsilon:03a5',
+
+  'neg:00ac',
+  'lnot:00ac',
+  'top:22a4',
+  'bot:22a5',
+  'vert:007c',
+  'Vert:2225',
+  'bracevert:23AA',
+  'arrowvert:23D0',
+  'Arrowvert:2016',
+];
+
+const VARIABLE_SYMBOLS = [
+  // Greek letters
+  'alpha:03b1',
+  'beta:03b2',
+  'gamma:03b3',
+  'delta:03b4',
+  'epsilon:03f5',
+  'zeta:03b6',
+  'eta:03b7',
+  'theta:03b8',
+  'iota:03b9',
+  'kappa:03ba',
+  'mu:03bc',
+  'nu:03bd',
+  'xi:03be',
+  'omicron:03bf',
+  'rho:03c1',
+  'sigma:03c3',
+  'tau:03c4',
+  'upsilon:03c5',
+  'phi:03d5',
+  'chi:03c7',
+  'psi:03c8',
+  'omega:03c9',
+
+  // Greek variants
+  'varepsilon:03b5',
+  'vartheta:03d1',
+  'varpi:03d6',
+  'varrho:03f1',
+  'varsigma:03c2',
+  'varphi:03c6',
+
+  // AMS Greek
+  'digamma:03dd',
+  'varkappa:03f0',
+
+  // Synonyms. format: "textinput/latex:unicode"
+  'sigmaf/varsigma:03c2',
+  'epsiv/varepsilon:03b5',
+  'Gammad/digamma:03dd',
+  'gammad/digamma:03dd',
+  'kappav/varkappa:03f0',
+  'phiv/varphi:03c6',
+  'piv/varpi:03d6',
+  'rhov/varrho:03f1',
+  'sigmav/varsigma:03c2',
+  'thetav/vartheta:03d1',
+  'upsi/upsilon:03c5',
+  'thetasym/vartheta:03d1',
+
+  // Other variables
+  'hbar:210f',
+  'ell:2113',
+  'imath:0131',
+  'jmath:0237',
+];
+// They exist, damnit
+for (let symbol of NON_SYMBOLA_SYMBOL) {
+  const match = symbol.match(/([a-zA-Z]+):(.+)/);
+  if (!match?.[1]) debugger;
+  // @ts-ignore
+  LatexCmds[match[1]] = bindNonSymbolaSymbol(
+    // @ts-ignore
+    '\\' + match[1] + ' ', // @ts-ignore
+    '&#x' + match[2] + ';'
+  );
+}
+for (let symbol of BASIC_VANILLA_SYMBOLS) {
+  const match = symbol.match(/([a-zA-Z]+)\/?([^:]*):(\w+)/);
+  // @ts-ignore
+  LatexCmds[match[1]] = bindVanillaSymbol(
+    // @ts-ignore
+    '\\' + (match[2] && match[2].length > 0 ? match[2] : match[1]) + ' ', // @ts-ignore
+    '&#x' + match[3] + ';'
+  );
+}
+for (let symbol of VARIABLE_SYMBOLS) {
+  const match = symbol.match(/([a-zA-Z]+)\/?([a-zA-Z]*):(\w+)/);
+  // @ts-ignore
+  LatexCmds[match[1]] = bindVariable(
+    // @ts-ignore
+    '\\' + (match[2] && match[2].length > 0 ? match[2] : match[1]) + ' ', // @ts-ignore
+    '&#x' + match[3] + ';'
+  );
+}
+
+LatexCmds['|'] = LatexCmds['Vert'];
+LatexCmds['#'] = bindVanillaSymbol('\\# ', '#');
+// LatexCmds['_'] = bind(VanillaSymbol, '\\_ ', '_'); // TODO: Does not parse
+
+// MathQuill non-standard commands
+LatexCmds.alef = LatexCmds.alefsym = LatexCmds.alephsym = LatexCmds.aleph;
